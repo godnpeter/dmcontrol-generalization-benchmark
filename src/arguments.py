@@ -20,6 +20,7 @@ def parse_args():
 	parser.add_argument('--init_steps', default=1000, type=int)
 	parser.add_argument('--batch_size', default=128, type=int)
 	parser.add_argument('--hidden_dim', default=1024, type=int)
+	parser.add_argument('--hard_aug_type', default='random_overlay', type=str)
 
 	# actor
 	parser.add_argument('--actor_lr', default=1e-3, type=float)
@@ -69,6 +70,10 @@ def parse_args():
 	parser.add_argument('--seed', default=None, type=int)
 	parser.add_argument('--log_dir', default='logs', type=str)
 	parser.add_argument('--save_video', default=True, action='store_true')
+
+	# logger 
+	parser.add_argument('--group_name', default='test', type=str)
+	parser.add_argument('--exp_name', default='test', type=str)
 
 	args = parser.parse_args()
 

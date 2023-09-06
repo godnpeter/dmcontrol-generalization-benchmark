@@ -14,6 +14,7 @@ class SVEA(SAC):
 		super().__init__(obs_shape, action_shape, args)
 		self.svea_alpha = args.svea_alpha
 		self.svea_beta = args.svea_beta
+		self.hard_aug_type = args.hard_aug_type
 
 	def update_critic(self, obs, action, reward, next_obs, not_done, L=None, step=None):
 		with torch.no_grad():
@@ -24,7 +25,12 @@ class SVEA(SAC):
 			target_Q = reward + (not_done * self.discount * target_V)
 
 		if self.svea_alpha == self.svea_beta:
-			obs = utils.cat(obs, augmentations.random_overlay(obs.clone()))
+			if self.hard_aug_type == 'random_overlay':
+				obs = utils.cat(obs, augmentations.random_overlay(obs.clone()))
+			elif self.hard_aug_type == 'random_conv':
+				obs = utils.cat(obs, augmentations.random_conv(obs.clone()))
+			elif self.hard_aug_type == 'combo':
+				raise NotImplementedError("Haven't implement combo augmentation yet")
 			action = utils.cat(action, action)
 			target_Q = utils.cat(target_Q, target_Q)
 

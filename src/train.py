@@ -5,6 +5,7 @@ import gym
 import utils
 import time
 import wandb
+import ipdb
 from arguments import parse_args
 from env.wrappers import make_env
 from algorithms.factory import make_agent
@@ -63,7 +64,7 @@ def main(args):
 		image_size=args.image_size,
 		mode='color_easy',
 		intensity=args.distracting_cs_intensity
-	) #if args.eval_mode is not None else None
+	)
 
 	test_ch_env = make_env(
 		domain_name=args.domain_name,
@@ -74,7 +75,7 @@ def main(args):
 		image_size=args.image_size,
 		mode='color_hard',
 		intensity=args.distracting_cs_intensity
-	) #if args.eval_mode is not None else None
+	)
 
 	test_ve_env = make_env(
 		domain_name=args.domain_name,
@@ -85,7 +86,7 @@ def main(args):
 		image_size=args.image_size,
 		mode='video_easy',
 		intensity=args.distracting_cs_intensity
-	) #if args.eval_mode is not None else None
+	)
 
 	test_vh_env = make_env(
 		domain_name=args.domain_name,
@@ -96,12 +97,14 @@ def main(args):
 		image_size=args.image_size,
 		mode='video_hard',
 		intensity=args.distracting_cs_intensity
-	) #if args.eval_mode is not None else None
+	)
 
 	# Create working directory
-	work_dir = os.path.join(args.log_dir, args.domain_name+'_'+args.task_name, args.algorithm, str(args.seed))
+	work_dir = os.path.join(args.log_dir, args.group_name, args.exp_name, \
+						 args.algorithm,  'cnn_' + str(args.num_shared_layers) + '_' + args.hard_aug_type, \
+						args.domain_name+'_'+args.task_name, str(args.seed))
 	print('Working directory:', work_dir)
-	assert not os.path.exists(os.path.join(work_dir, 'train.log')), 'specified working directory already exists'
+	assert not os.path.exists(os.path.join(work_dir, 'model','500000.pt')), 'specified working directory already exists'
 	utils.make_dir(work_dir)
 	model_dir = utils.make_dir(os.path.join(work_dir, 'model'))
 	video_dir = utils.make_dir(os.path.join(work_dir, 'video'))
@@ -124,7 +127,7 @@ def main(args):
 		action_shape=env.action_space.shape,
 		args=args
 	)
-
+	
 	start_step, episode, episode_reward, done = 0, 0, 0, True
 	L = Logger(work_dir, args)
 	start_time = time.time()

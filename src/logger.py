@@ -15,9 +15,9 @@ FORMAT_CONFIG = {
             ('actor_loss', 'ALOSS', 'float'), ('critic_loss', 'CLOSS', 'float'),
             ('aux_loss', 'AUXLOSS', 'float')
         ],
-        'eval': [('frame', 'F', 'int'), ('train/episode_return', 'ER', 'float'), ('color_easy/episode_return', 'CE', 'float'), \
-                 ('color_hard/episode_return', 'CH', 'float'), ('video_easy/episode_return', 'VE', 'float'), \
-                ('video_hard/episode_return', 'VH', 'float'), ('duration', 'D', 'time'),]
+        'eval': [('frame', 'F', 'int'), ('train_episode_return', 'ER', 'float'), ('color_easy_episode_return', 'CE', 'float'), \
+                 ('color_hard_episode_return', 'CH', 'float'), ('video_easy_episode_return', 'VE', 'float'), \
+                ('video_hard_episode_return', 'VH', 'float'), ('duration', 'D', 'time'),]
     }
 }
 
@@ -52,7 +52,7 @@ class MetersGroup(object):
                 key = key[len('train') + 1:]
             else:
                 key = key[len('eval') + 1:]
-            #key = key.replace('/', '_')
+            key = key.replace('/', '_')
             data[key] = meter.value()
         return data
 
@@ -101,9 +101,6 @@ class Logger(object):
         self._log_dir = log_dir
         args_dict = vars(args)
         args_dict['env'] = {'domain':args.domain_name, 'task':args.task_name}
-        args_dict['group_name'] = 'Hansen_repo'
-        args_dict['exp_name'] = 'vanilla_svea_randomoverlay'
-        args_dict['hard_aug_type'] = 'random_overlay'
         
         wandb.init(project='Gen4RL_dmcgb', 
                 entity='draftrec',

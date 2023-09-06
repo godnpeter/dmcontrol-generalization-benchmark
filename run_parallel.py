@@ -25,12 +25,20 @@ if __name__ == '__main__':
     parser.add_argument('--num_seeds',    type=int,     default=5)
     parser.add_argument('--total_devices',  type=int,     default=8)  # 그 서버에 gpu가 몇개인지
     parser.add_argument('--num_exp_per_device',  type=int,  default=3)
-    parser.add_argument('--eval_mode', type=str,  default='video_hard') 
+    parser.add_argument('--algorithm',  type=str,  default='svea')
+    parser.add_argument('--hard_aug_type', type=str, default='random_overlay')
+    parser.add_argument('--num_shared_layers',  type=int,  default=11)
+    parser.add_argument('--group_name', type=str, default='test')
+    parser.add_argument('--exp_name', type=str, default='test')
+    parser.add_argument('--num_games', type=int, default=7)
+    parser.add_argument('--egl_device_id_equal_to_cuda_id', default=False, action='store_true')
+
     #parser.add_argument('--eval_mode', action='append',  default=[]) 
 
     args = vars(parser.parse_args())
     seeds = np.arange(args.pop('num_seeds')) 
     print('seeds:',seeds)
+    print('algorithm: ', args['algorithm'])
 
     # gpu 몇개 사용할지는 CUDA_VISIBLE_DEVICES로 파악한다
     available_gpus = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
@@ -42,9 +50,10 @@ if __name__ == '__main__':
     pool_size = num_devices * num_exp_per_device 
         
     # number of game environment to run experiments
-
-    games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('finger_spin'), \
-            ('cheetah_run'),('cartpole_swingup'), ('cup_catch')]
+    num_games = args.pop('num_games')
+    if num_games == 7:
+        games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('finger_spin'), \
+                ('cheetah_run'),('cartpole_swingup'), ('cup_catch')]
 
     # create configurations for child run
     experiments = []
@@ -69,7 +78,7 @@ if __name__ == '__main__':
         else:
             exp['action_repeat'] = 4
             exp['train_steps'] = '125k'
-        exp['eval_mode'] = args['eval_mode']
+        
         experiments.append(exp)
         print(exp)
     # run parallell experiments
@@ -87,14 +96,6 @@ if __name__ == '__main__':
             '2':'3',
             '3':'2'
         }
-        '''
-        egl_device = {
-            '0':'3',
-            '1':'2',
-            '2':'1',
-            '3':'0'
-        }
-        '''
     elif total_devices == 6:
         egl_device={
             '0': '5',
@@ -106,17 +107,6 @@ if __name__ == '__main__':
         }
 
     elif total_devices == 8:
-        
-        #egl_device = {
-        #    '0': '0',
-        #    '1': '0',
-        #    '2': '0',
-        #    '3': '0',
-        #    '4': '0',
-        #    '5': '0',
-        #    '6': '0',
-        #    '7': '0'
-        # }
 
         egl_device = {
             '0': '3',
@@ -129,6 +119,7 @@ if __name__ == '__main__':
             '7': '4'
         }
         
+    
     for exp in experiments:
         wait = True
         while wait:
@@ -150,30 +141,41 @@ if __name__ == '__main__':
         # get running processes in the gpu
         processes = process_dict[gpu_id]
 
-        m_e_d_i = egl_device[gpu_id]
+        if args['egl_device_id_equal_to_cuda_id']:
+            m_e_d_i = str(gpu_id)
+        else:
+            m_e_d_i = egl_device[gpu_id]
+        
         cmd = 'CUDA_VISIBLE_DEVICES={} MUJOCO_EGL_DEVICE_ID={} \
                 python src/train.py \
-                --algorithm svea \
+                --group_name={} \
+                --exp_name={} \
+                --algorithm={} \
                 --domain_name={} \
                 --task_name={} \
                 --action_repeat={} \
                 --train_steps={} \
-                --eval_mode={} \
                 --seed={} \
+                --hard_aug_type={} \
+                --num_shared_layers={} \
                 --save_video \
                 '.format(
                     str(gpu_id),
                     str(m_e_d_i),
+                    exp['group_name'],
+                    exp['exp_name'],
+                    exp['algorithm'],
                     exp['domain_name'],
                     exp['task_name'],
                     exp['action_repeat'],
                     exp['train_steps'],
-                    exp['eval_mode'],
-                    exp['seed']
+                    exp['seed'],
+                    exp['hard_aug_type'],
+                    exp['num_shared_layers']
                 )
         
         print(cmd)
-
+        ipdb.set_trace()
         process = multiprocessing.Process(target=run_script, args=(cmd,))
         process.start()
         processes.append(process)
