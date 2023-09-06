@@ -1,0 +1,1 @@
+{"eval/episode": 0.0, "eval/_episode_reward": 2.2011365483106653, "eval/color_easy_episode_reward": 0.9577045139716104, "eval/step": 0, "_timestamp": 1693915664.1126795, "_runtime": 187.71218752861023, "_step": 2, "eval/color_hard_episode_reward": 2.4925034243293753, "eval/video_easy_episode_reward": 7.22061726761059, "_wandb": {"runtime": 270}}

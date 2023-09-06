@@ -1,0 +1,1 @@
+{"eval/episode": 0.0, "eval/episode_reward": 130.33333333333334, "eval/episode_reward_test_env": 131.33333333333334, "eval/step": 0, "_timestamp": 1693915283.8769014, "_runtime": 338.8354263305664, "_step": 4, "train/episode_reward": 76.0, "train/episode": 4.0, "train/duration": 0.39357781410217285, "train/step": 1000, "_wandb": {"runtime": 406}}

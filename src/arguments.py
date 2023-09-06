@@ -15,7 +15,7 @@ def parse_args():
 	
 	# agent
 	parser.add_argument('--algorithm', default='sac', type=str)
-	parser.add_argument('--train_steps', default='500k', type=str)
+	parser.add_argument('--train_steps', default='125k', type=str)
 	parser.add_argument('--discount', default=0.99, type=float)
 	parser.add_argument('--init_steps', default=1000, type=int)
 	parser.add_argument('--batch_size', default=128, type=int)
@@ -61,14 +61,14 @@ def parse_args():
 
 	# eval
 	parser.add_argument('--save_freq', default='100k', type=str)
-	parser.add_argument('--eval_freq', default='10k', type=str)
-	parser.add_argument('--eval_episodes', default=30, type=int)
+	parser.add_argument('--eval_freq', default='50k', type=str)
+	parser.add_argument('--eval_episodes', default=10, type=int)
 	parser.add_argument('--distracting_cs_intensity', default=0., type=float)
 
 	# misc
 	parser.add_argument('--seed', default=None, type=int)
 	parser.add_argument('--log_dir', default='logs', type=str)
-	parser.add_argument('--save_video', default=False, action='store_true')
+	parser.add_argument('--save_video', default=True, action='store_true')
 
 	args = parser.parse_args()
 

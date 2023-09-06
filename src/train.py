@@ -4,14 +4,16 @@ import numpy as np
 import gym
 import utils
 import time
+import wandb
 from arguments import parse_args
 from env.wrappers import make_env
 from algorithms.factory import make_agent
 from logger import Logger
 from video import VideoRecorder
+os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
+os.environ['MUJOCO_GL'] = 'egl'
 
-
-def evaluate(env, agent, video, num_episodes, L, step, test_env=False):
+def evaluate(env, agent, video, num_episodes, L, step, test_env=False, final=False):
 	episode_rewards = []
 	for i in range(num_episodes):
 		obs = env.reset()
@@ -22,13 +24,16 @@ def evaluate(env, agent, video, num_episodes, L, step, test_env=False):
 			with utils.eval_mode(agent):
 				action = agent.select_action(obs)
 			obs, reward, done, _ = env.step(action)
-			video.record(env)
+			video.record(env, env._mode)
 			episode_reward += reward
 
 		if L is not None:
-			_test_env = '_test_env' if test_env else ''
-			video.save(f'{step}{_test_env}.mp4')
-			L.log(f'eval/episode_reward{_test_env}', episode_reward, step)
+			_test_env = test_env if test_env else 'train'
+			video.save(f'{step * args.action_repeat}{_test_env}.mp4')
+			if final:
+				L.log(f'eval/{_test_env}/final_episode_return', episode_reward, step)
+			else:
+				L.log(f'eval/{_test_env}/episode_return', episode_reward, step)
 		episode_rewards.append(episode_reward)
 	
 	return np.mean(episode_rewards)
@@ -37,7 +42,7 @@ def evaluate(env, agent, video, num_episodes, L, step, test_env=False):
 def main(args):
 	# Set seed
 	utils.set_seed_everywhere(args.seed)
-
+	torch.set_num_threads(1)
 	# Initialize environments
 	gym.logger.set_level(40)
 	env = make_env(
@@ -49,16 +54,49 @@ def main(args):
 		image_size=args.image_size,
 		mode='train'
 	)
-	test_env = make_env(
+	test_ce_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
 		seed=args.seed+42,
 		episode_length=args.episode_length,
 		action_repeat=args.action_repeat,
 		image_size=args.image_size,
-		mode=args.eval_mode,
+		mode='color_easy',
 		intensity=args.distracting_cs_intensity
-	) if args.eval_mode is not None else None
+	) #if args.eval_mode is not None else None
+
+	test_ch_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='color_hard',
+		intensity=args.distracting_cs_intensity
+	) #if args.eval_mode is not None else None
+
+	test_ve_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='video_easy',
+		intensity=args.distracting_cs_intensity
+	) #if args.eval_mode is not None else None
+
+	test_vh_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='video_hard',
+		intensity=args.distracting_cs_intensity
+	) #if args.eval_mode is not None else None
 
 	# Create working directory
 	work_dir = os.path.join(args.log_dir, args.domain_name+'_'+args.task_name, args.algorithm, str(args.seed))
@@ -88,29 +126,32 @@ def main(args):
 	)
 
 	start_step, episode, episode_reward, done = 0, 0, 0, True
-	L = Logger(work_dir)
+	L = Logger(work_dir, args)
 	start_time = time.time()
 	for step in range(start_step, args.train_steps+1):
 		if done:
 			if step > start_step:
-				L.log('train/duration', time.time() - start_time, step)
+				L.log('train/duration', time.time() - start_time, step * args.action_repeat)
 				start_time = time.time()
-				L.dump(step)
+				L.dump(step * args.action_repeat)
 
 			# Evaluate agent periodically
-			if step % args.eval_freq == 0:
+			if (step * args.action_repeat) % args.eval_freq == 0:
 				print('Evaluating:', work_dir)
-				L.log('eval/episode', episode, step)
-				evaluate(env, agent, video, args.eval_episodes, L, step)
-				if test_env is not None:
-					evaluate(test_env, agent, video, args.eval_episodes, L, step, test_env=True)
-				L.dump(step)
-
+				eval_start_time = time.time()
+				L.log('eval/episode', episode, step * args.action_repeat)
+				evaluate(env, agent, video, args.eval_episodes, L, step * args.action_repeat)
+				evaluate(test_ce_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='color_easy')
+				evaluate(test_ch_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='color_hard')
+				evaluate(test_ve_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy')
+				evaluate(test_vh_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_hard')
+				L.log('eval/duration', time.time() - eval_start_time, step * args.action_repeat)
+				L.dump(step * args.action_repeat)
 			# Save agent periodically
-			if step > start_step and step % args.save_freq == 0:
-				torch.save(agent, os.path.join(model_dir, f'{step}.pt'))
+			#if step > start_step and step % args.save_freq == 0:
+				#torch.save(agent, os.path.join(model_dir, f'{step * args.action_repeat}.pt'))
 
-			L.log('train/episode_reward', episode_reward, step)
+			L.log('train/episode_return', episode_reward, step * args.action_repeat)
 
 			obs = env.reset()
 			done = False
@@ -118,7 +159,7 @@ def main(args):
 			episode_step = 0
 			episode += 1
 
-			L.log('train/episode', episode, step)
+			L.log('train/episode', episode, step * args.action_repeat)
 
 		# Sample action for data collection
 		if step < args.init_steps:
@@ -142,7 +183,15 @@ def main(args):
 
 		episode_step += 1
 
+	evaluate(test_ce_env, agent, video, args.eval_episodes, L, step, test_env='color_easy', final=True)
+	evaluate(test_ch_env, agent, video, args.eval_episodes, L, step, test_env='color_hard', final=True)
+	evaluate(test_ve_env, agent, video, args.eval_episodes, L, step, test_env='video_easy', final=True)
+	evaluate(test_vh_env, agent, video, args.eval_episodes, L, step, test_env='video_hard', final=True)
+	L.dump(step * args.action_repeat)
+	torch.save(agent, os.path.join(model_dir, f'{step * args.action_repeat}.pt'))
+	print('Saved model')
 	print('Completed training for', work_dir)
+	wandb.finish()
 
 
 if __name__ == '__main__':

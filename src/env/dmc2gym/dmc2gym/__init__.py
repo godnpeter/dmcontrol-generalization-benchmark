@@ -1,6 +1,6 @@
 import gym
 from gym.envs.registration import register
-
+import ipdb
 
 def make(
         domain_name,

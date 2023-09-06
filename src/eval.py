@@ -11,7 +11,8 @@ from env.wrappers import make_env
 from algorithms.factory import make_agent
 from video import VideoRecorder
 import augmentations
-
+os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
+os.environ['MUJOCO_GL'] = 'egl'
 
 def evaluate(env, agent, video, num_episodes, eval_mode, adapt=False):
 	episode_rewards = []
