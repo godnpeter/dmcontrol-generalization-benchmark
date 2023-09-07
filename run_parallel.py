@@ -54,7 +54,10 @@ if __name__ == '__main__':
     if num_games == 7:
         games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('finger_spin'), \
                 ('cheetah_run'),('cartpole_swingup'), ('cup_catch')]
-
+    elif num_games == 4:
+        games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('cartpole_swingup') ]
+    elif num_games == 3:
+        games = [('cheetah_run'), ('finger_spin'), ('cup_catch') ]
     # create configurations for child run
     experiments = []
     for seed, game in itertools.product(*[seeds, games]):
@@ -175,7 +178,7 @@ if __name__ == '__main__':
                 )
         
         print(cmd)
-        ipdb.set_trace()
+
         process = multiprocessing.Process(target=run_script, args=(cmd,))
         process.start()
         processes.append(process)

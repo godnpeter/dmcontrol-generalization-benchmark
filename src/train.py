@@ -164,6 +164,10 @@ def main(args):
 
 			L.log('train/episode', episode, step * args.action_repeat)
 
+		# Perform periodic reset
+		if step % args.reset_interval_steps :
+			agent.reset(step)
+		
 		# Sample action for data collection
 		if step < args.init_steps:
 			action = env.action_space.sample()

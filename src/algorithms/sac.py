@@ -9,6 +9,8 @@ import algorithms.modules as m
 
 class SAC(object):
 	def __init__(self, obs_shape, action_shape, args):
+		self.args = args
+		self.base_seed = args.seed
 		self.discount = args.discount
 		self.critic_tau = args.critic_tau
 		self.encoder_tau = args.encoder_tau
@@ -56,6 +58,35 @@ class SAC(object):
 
 	def eval(self):
 		self.train(False)
+
+	def reset(self, step):
+		# We give new seed every time we perform reset
+		# https://arxiv.org/pdf/2205.07802.pdf
+		reset_seed = self.base_seed + step
+
+		if self.args.do_encoder_reset:
+			# actor, critic encoder reset
+			self.actor.encoder.reset_parameters(
+				reset_seed, 
+				self.args.shrink_alpha
+			)
+			# critic_target encoder reset
+			if self.args.critic_target_reset == 'copy_critic':
+				print("critic_target: deepcopy(critic) after reset")
+				self.critic_target.encoder = deepcopy(self.critic.encoder)
+			else:
+				raise NotImplementedError
+			for param in self.critic_target.parameters():
+					param.requires_grad = False
+
+		if self.args.do_policy_reset:
+			self.actor.mlp.reset_parameters(reset_seed)
+			self.critic.Q1.reset_parameters(reset_seed)
+			self.critic.Q2.reset_parameters(reset_seed)
+			self.critic_target.Q1 = deepcopy(self.critic.Q1)
+			self.critic_target.Q2 = deepcopy(self.critic.Q2)
+			for param in self.critic_target.parameters():
+				param.requires_grad = False
 
 	@property
 	def alpha(self):

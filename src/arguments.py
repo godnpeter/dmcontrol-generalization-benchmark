@@ -1,6 +1,14 @@
 import argparse
 import numpy as np
 
+def str2bool(v):
+    """Convert string representation of boolean to actual boolean."""
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def parse_args():
 	parser = argparse.ArgumentParser()
@@ -46,6 +54,12 @@ def parse_args():
 	parser.add_argument('--init_temperature', default=0.1, type=float)
 	parser.add_argument('--alpha_lr', default=1e-4, type=float)
 	parser.add_argument('--alpha_beta', default=0.5, type=float)
+
+	# reset
+	parser.add_argument('--reset_interval_steps', default=25000, type=int)
+	parser.add_argument('--do_policy_reset', default='False', type=str2bool)
+	parser.add_argument('--do_encoder_reset', default='False', type=str2bool)
+	parser.add_argument('--critic_target_reset', default='copy_critic', type=str)
 
 	# auxiliary tasks
 	parser.add_argument('--aux_lr', default=1e-3, type=float)
