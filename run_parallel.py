@@ -27,7 +27,14 @@ if __name__ == '__main__':
     parser.add_argument('--num_exp_per_device',  type=int,  default=3)
     parser.add_argument('--algorithm',  type=str,  default='svea')
     parser.add_argument('--hard_aug_type', type=str, default='random_overlay')
+    parser.add_argument('--encoder_type', type=str, default='cnn')
+    parser.add_argument('--width_expansion', type=int, default=1)
+    parser.add_argument('--replay_ratio', default=1, type=int)
+    parser.add_argument('--shrink_alpha', default=0.8, type=float)
+    parser.add_argument('--reset_interval_steps', default=25000, type=int)
     parser.add_argument('--num_shared_layers',  type=int,  default=11)
+    parser.add_argument('--do_policy_reset',  type=str,  default='false')
+    parser.add_argument('--do_encoder_reset',  type=str,  default='false')
     parser.add_argument('--group_name', type=str, default='test')
     parser.add_argument('--exp_name', type=str, default='test')
     parser.add_argument('--num_games', type=int, default=7)
@@ -161,6 +168,13 @@ if __name__ == '__main__':
                 --seed={} \
                 --hard_aug_type={} \
                 --num_shared_layers={} \
+                --do_policy_reset={} \
+                --do_encoder_reset={} \
+                --encoder_type={} \
+                --width_expansion={} \
+                --replay_ratio={} \
+                --shrink_alpha={} \
+                --reset_interval_steps={} \
                 --save_video \
                 '.format(
                     str(gpu_id),
@@ -174,7 +188,14 @@ if __name__ == '__main__':
                     exp['train_steps'],
                     exp['seed'],
                     exp['hard_aug_type'],
-                    exp['num_shared_layers']
+                    exp['num_shared_layers'],
+                    exp['do_policy_reset'],
+                    exp['do_encoder_reset'],
+                    exp['encoder_type'],
+                    exp['width_expansion'],
+                    exp['replay_ratio'],
+                    exp['shrink_alpha'],
+                    exp['reset_interval_steps']
                 )
         
         print(cmd)

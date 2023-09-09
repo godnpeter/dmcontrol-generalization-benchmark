@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from copy import deepcopy
 import utils
+import ipdb
 import algorithms.modules as m
 
 
@@ -17,7 +18,11 @@ class SAC(object):
 		self.actor_update_freq = args.actor_update_freq
 		self.critic_target_update_freq = args.critic_target_update_freq
 
-		shared_cnn = m.SharedCNN(obs_shape, args.num_shared_layers, args.num_filters).cuda()
+		if args.encoder_type == 'cnn':
+			shared_cnn = m.SharedCNN(obs_shape, args.num_shared_layers, args.num_filters).cuda()
+		elif args.encoder_type == 'impala':
+			shared_cnn = m.Impala(obs_shape, args.width_expansion).cuda()
+		
 		head_cnn = m.HeadCNN(shared_cnn.out_shape, args.num_head_layers, args.num_filters).cuda()
 		actor_encoder = m.Encoder(
 			shared_cnn,
@@ -29,7 +34,7 @@ class SAC(object):
 			head_cnn,
 			m.RLProjection(head_cnn.out_shape, args.projection_dim)
 		)
-
+		
 		self.actor = m.Actor(actor_encoder, action_shape, args.hidden_dim, args.actor_log_std_min, args.actor_log_std_max).cuda()
 		self.critic = m.Critic(critic_encoder, action_shape, args.hidden_dim).cuda()
 		self.critic_target = deepcopy(self.critic)
@@ -47,6 +52,15 @@ class SAC(object):
 		self.log_alpha_optimizer = torch.optim.Adam(
 			[self.log_alpha], lr=args.alpha_lr, betas=(args.alpha_beta, 0.999)
 		)
+
+		# parameter 개수 파악
+		encoder_par = sum(p.numel() for p in shared_cnn.parameters())		
+		actor_par = sum(p.numel() for p in self.actor.parameters())
+		critic_par = sum(p.numel() for p in self.critic.parameters())
+		print('encoder: ', encoder_par)
+		print('actor + encoder: ', actor_par)
+		print('critic + encoder: ', critic_par)
+		
 
 		self.train()
 		self.critic_target.train()
@@ -66,7 +80,11 @@ class SAC(object):
 
 		if self.args.do_encoder_reset:
 			# actor, critic encoder reset
-			self.actor.encoder.reset_parameters(
+			self.actor.encoder.reset_encoder_parameters(
+				reset_seed, 
+				self.args.shrink_alpha
+			)
+			self.critic.encoder.reset_encoder_parameters(
 				reset_seed, 
 				self.args.shrink_alpha
 			)
@@ -76,17 +94,17 @@ class SAC(object):
 				self.critic_target.encoder = deepcopy(self.critic.encoder)
 			else:
 				raise NotImplementedError
-			for param in self.critic_target.parameters():
-					param.requires_grad = False
-
+			print('Performed encoder reset at step ', step)
+		
 		if self.args.do_policy_reset:
-			self.actor.mlp.reset_parameters(reset_seed)
-			self.critic.Q1.reset_parameters(reset_seed)
-			self.critic.Q2.reset_parameters(reset_seed)
+			self.actor.reset_policy_parameters(reset_seed)
+			self.critic.reset_policy_parameters(reset_seed)
 			self.critic_target.Q1 = deepcopy(self.critic.Q1)
 			self.critic_target.Q2 = deepcopy(self.critic.Q2)
-			for param in self.critic_target.parameters():
-				param.requires_grad = False
+			print('Performed policy reset at step ', step)
+		
+		for param in self.critic_target.parameters():
+			param.requires_grad = False
 
 	@property
 	def alpha(self):

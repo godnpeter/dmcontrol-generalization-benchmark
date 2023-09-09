@@ -49,7 +49,9 @@ def parse_args():
 	parser.add_argument('--num_filters', default=32, type=int)
 	parser.add_argument('--projection_dim', default=100, type=int)
 	parser.add_argument('--encoder_tau', default=0.05, type=float)
-	
+	parser.add_argument('--encoder_type', default='cnn', type=str)
+	parser.add_argument('--width_expansion', default=1, type=int)
+
 	# entropy maximization
 	parser.add_argument('--init_temperature', default=0.1, type=float)
 	parser.add_argument('--alpha_lr', default=1e-4, type=float)
@@ -59,7 +61,9 @@ def parse_args():
 	parser.add_argument('--reset_interval_steps', default=25000, type=int)
 	parser.add_argument('--do_policy_reset', default='False', type=str2bool)
 	parser.add_argument('--do_encoder_reset', default='False', type=str2bool)
+	parser.add_argument('--shrink_alpha', default=0.8, type=float)
 	parser.add_argument('--critic_target_reset', default='copy_critic', type=str)
+	parser.add_argument('--replay_ratio', default=1, type=int)
 
 	# auxiliary tasks
 	parser.add_argument('--aux_lr', default=1e-3, type=float)

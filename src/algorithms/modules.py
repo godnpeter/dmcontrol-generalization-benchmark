@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from functools import partial
+from functools import partial, reduce
 
 
 def _get_out_shape_cuda(in_shape, layers):
@@ -110,6 +110,27 @@ class RLProjection(nn.Module):
 	def forward(self, x):
 		return self.projection(x)
 
+	def reset_parameters(self, reset_seed, shrink_alpha):
+		# Save current RNG state
+		original_rng_state = torch.get_rng_state()
+
+		# Save current parameters
+		current_weights = {}
+		for name, param in self.named_parameters():
+			current_weights[name] = param.data.clone()
+
+		# Set the manual seed
+		torch.manual_seed(reset_seed)
+		# Apply the initialization
+		self.apply(weight_init)
+
+		# Update the weights: 0.8 * current weight + 0.2 * new weight
+		for name, param in self.named_parameters():
+			param.data = shrink_alpha * current_weights[name] + (1-shrink_alpha) * param.data
+
+		# Restore original RNG state
+		torch.set_rng_state(original_rng_state)
+
 
 class SODAMLP(nn.Module):
 	def __init__(self, projection_dim, hidden_dim, out_dim):
@@ -144,6 +165,28 @@ class SharedCNN(nn.Module):
 
 	def forward(self, x):
 		return self.layers(x)
+	
+	def reset_parameters(self, reset_seed, shrink_alpha):
+		# Save current RNG state
+		original_rng_state = torch.get_rng_state()
+
+		# Save current parameters
+		current_weights = {}
+		for name, param in self.named_parameters():
+			current_weights[name] = param.data.clone()
+
+		# Set the manual seed
+		torch.manual_seed(reset_seed)
+		# Apply the initialization
+		self.apply(weight_init)
+
+		# Update the weights: 0.8 * current weight + 0.2 * new weight
+		for name, param in self.named_parameters():
+			param.data = shrink_alpha * current_weights[name] + (1-shrink_alpha) * param.data
+
+		# Restore original RNG state
+		torch.set_rng_state(original_rng_state)
+
 
 
 class HeadCNN(nn.Module):
@@ -176,6 +219,10 @@ class Encoder(nn.Module):
 		if detach:
 			x = x.detach()
 		return self.projection(x)
+	
+	def reset_encoder_parameters(self, reset_seed, shrink_alpha):
+		self.shared_cnn.reset_parameters(reset_seed, shrink_alpha)
+		self.projection.reset_parameters(reset_seed, shrink_alpha)
 
 
 class Actor(nn.Module):
@@ -216,6 +263,18 @@ class Actor(nn.Module):
 
 		return mu, pi, log_pi, log_std
 
+	def reset_policy_parameters(self, reset_seed):
+		# Save current RNG state
+		original_rng_state = torch.get_rng_state()
+
+		# Set the manual seed
+		torch.manual_seed(reset_seed)
+
+		# Apply the initialization
+		self.mlp.apply(weight_init)
+
+		# Restore original RNG state
+		torch.set_rng_state(original_rng_state)
 
 class QFunction(nn.Module):
 	def __init__(self, obs_dim, action_dim, hidden_dim):
@@ -247,6 +306,19 @@ class Critic(nn.Module):
 		x = self.encoder(x, detach)
 		return self.Q1(x, action), self.Q2(x, action)
 
+	def reset_policy_parameters(self, reset_seed):
+		# Save current RNG state
+		original_rng_state = torch.get_rng_state()
+
+		# Set the manual seed
+		torch.manual_seed(reset_seed)
+
+		# Apply the initialization
+		self.Q1.apply(weight_init)
+		self.Q2.apply(weight_init)
+
+		# Restore original RNG state
+		torch.set_rng_state(original_rng_state)
 
 class CURLHead(nn.Module):
 	def __init__(self, encoder):
@@ -297,3 +369,104 @@ class SODAPredictor(nn.Module):
 
 	def forward(self, x):
 		return self.mlp(self.encoder(x))
+
+
+#################################################
+###############IMPALA RELATED CODE###############
+def _get_out_shape(in_shape, layers):
+	x = torch.randn(*in_shape).unsqueeze(0)
+	for l in layers:
+		x = l(x)
+
+	return x.squeeze(0).shape
+
+class ResidualBlock(nn.Module):
+    def __init__(self,
+                 in_channels):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
+
+        self.residual_layers = nn.Sequential(
+            nn.ReLU(),
+            self.conv1,
+            nn.ReLU(),
+            self.conv2,
+        )
+
+
+    def forward(self, x):
+        out = self.residual_layers(x)
+        return out + x
+
+class ImpalaBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ImpalaBlock, self).__init__()
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)
+        self.res1 = ResidualBlock(out_channels)
+        self.res2 = ResidualBlock(out_channels)
+
+        self.block_layers = nn.Sequential(
+            self.conv,
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            self.res1,
+            self.res2
+        )
+
+    def forward(self, x):
+        x = self.block_layers(x)
+        return x
+
+class Impala(nn.Module):
+	def __init__(self,
+					obs_shape,
+					width_expansion):
+		super(Impala, self).__init__()
+		self.in_channels = obs_shape[0]
+		self.backbone = list()
+		self.backbone.append(ImpalaBlock(in_channels=self.in_channels, out_channels=16 * width_expansion))
+		self.backbone.append(ImpalaBlock(in_channels=16 * width_expansion, out_channels=32 * width_expansion))
+		self.backbone.append(ImpalaBlock(in_channels=32 * width_expansion, out_channels=32 * width_expansion))
+		self.backbone = nn.Sequential(*self.backbone)
+
+		self.out_shape = _get_out_shape(obs_shape, self.backbone)
+		self.apply(weight_init)
+
+		#FIXME need to 
+        # if weight_init_type == 'xavier':
+        #     self.apply(xavier_uniform_init)
+        # elif weight_init_type == 'dmc':
+        #     self.apply(utils.weight_init)
+
+	def forward(self, x):
+		x = x / 255.0 - 0.5
+		# Extract observation tensor from dictionary x
+		x = self.backbone(x)
+		x = nn.ReLU()(x)
+		x = x.view(x.shape[0], -1)
+		return x
+
+	def reset_parameters(self, reset_seed, shrink_alpha=0.5):
+		# Save current RNG state
+		original_rng_state = torch.get_rng_state()
+
+		# Save current parameters
+		current_weights = {}
+		for name, param in self.named_parameters():
+			current_weights[name] = param.data.clone()
+
+		# Set the manual seed
+		torch.manual_seed(reset_seed)
+		# Apply the initialization
+		self.apply(weight_init)
+
+		# Update the weights(e.g., 0.5 * current weight + 0.5 * new weight)
+		for name, param in self.named_parameters():
+			param.data = shrink_alpha * current_weights[name] + (1-shrink_alpha) * param.data
+
+		# Restore original RNG state
+		torch.set_rng_state(original_rng_state)
+
+#################################################
+#################################################
+    

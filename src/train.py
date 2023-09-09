@@ -100,9 +100,18 @@ def main(args):
 	)
 
 	# Create working directory
-	work_dir = os.path.join(args.log_dir, args.group_name, args.exp_name, \
-						 args.algorithm,  'cnn_' + str(args.num_shared_layers) + '_' + args.hard_aug_type, \
-						args.domain_name+'_'+args.task_name, str(args.seed))
+	if args.encoder_type == 'cnn':
+		work_dir = os.path.join(args.log_dir, args.group_name, args.exp_name, \
+							args.algorithm,  str(args.encoder_type)+ '_' + str(args.num_shared_layers) + '_' + args.hard_aug_type, \
+							args.domain_name+'_'+args.task_name, str(args.seed))
+	elif args.encoder_type == 'impala':
+		work_dir = os.path.join(args.log_dir, args.group_name, args.exp_name, \
+							args.algorithm,  str(args.encoder_type) + '_' + args.hard_aug_type, \
+							args.domain_name+'_'+args.task_name, str(args.seed))
+	else:
+		raise NotImplementedError
+	
+
 	print('Working directory:', work_dir)
 	assert not os.path.exists(os.path.join(work_dir, 'model','500000.pt')), 'specified working directory already exists'
 	utils.make_dir(work_dir)
@@ -165,8 +174,12 @@ def main(args):
 			L.log('train/episode', episode, step * args.action_repeat)
 
 		# Perform periodic reset
-		if step % args.reset_interval_steps :
-			agent.reset(step)
+		if args.replay_ratio == 1:
+			if (step % args.reset_interval_steps == 0) and (step != 0) and (step < (args.train_steps - 10)):
+				agent.reset(step)
+		else:
+			if (step % (args.reset_interval_steps / args.replay_ratio) == 0) and (step != 0) and (step < (args.train_steps - 10)):
+				agent.reset(step)
 		
 		# Sample action for data collection
 		if step < args.init_steps:
@@ -177,7 +190,7 @@ def main(args):
 
 		# Run training update
 		if step >= args.init_steps:
-			num_updates = args.init_steps if step == args.init_steps else 1
+			num_updates = args.init_steps if step == args.init_steps else args.replay_ratio
 			for _ in range(num_updates):
 				agent.update(replay_buffer, L, step)
 

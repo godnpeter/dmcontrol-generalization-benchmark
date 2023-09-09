@@ -7,6 +7,8 @@ import utils
 import augmentations
 import algorithms.modules as m
 from algorithms.sac import SAC
+import ipdb
+import random
 
 
 class SVEA(SAC):
@@ -15,6 +17,8 @@ class SVEA(SAC):
 		self.svea_alpha = args.svea_alpha
 		self.svea_beta = args.svea_beta
 		self.hard_aug_type = args.hard_aug_type
+		if self.hard_aug_type == 'combo':
+			self.combo_aug = [augmentations.random_overlay, augmentations.random_conv, augmentations.random_shift]
 
 	def update_critic(self, obs, action, reward, next_obs, not_done, L=None, step=None):
 		with torch.no_grad():
@@ -30,7 +34,9 @@ class SVEA(SAC):
 			elif self.hard_aug_type == 'random_conv':
 				obs = utils.cat(obs, augmentations.random_conv(obs.clone()))
 			elif self.hard_aug_type == 'combo':
-				raise NotImplementedError("Haven't implement combo augmentation yet")
+				random_hard_aug = random.choice(self.combo_aug)
+				obs = utils.cat(obs, random_hard_aug(obs.clone()))
+			
 			action = utils.cat(action, action)
 			target_Q = utils.cat(target_Q, target_Q)
 
