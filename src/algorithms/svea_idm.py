@@ -11,7 +11,7 @@ import ipdb
 import random
 
 
-class SVEA(SAC):
+class SVEA_IDM(SAC):
 	def __init__(self, obs_shape, action_shape, args):
 		super().__init__(obs_shape, action_shape, args)
 		self.svea_alpha = args.svea_alpha
@@ -19,22 +19,39 @@ class SVEA(SAC):
 		self.hard_aug_type = args.hard_aug_type
 		if self.hard_aug_type == 'combo':
 			self.combo_aug = [augmentations.random_overlay, augmentations.random_conv, augmentations.random_shift]
-		elif self.hard_aug_type == 'sequential_combo':
-			self.combo_aug = [augmentations.random_conv, augmentations.random_overlay]
-			self.combo_aug_index = 0
-			# Learn from random_shift only once
-			self.random_hard_aug = augmentations.random_shift
 
-	def get_next_combo_aug(self):
-		combo_hard_aug = self.combo_aug[self.combo_aug_index]
-		self.combo_aug_index = (self.combo_aug_index + 1) % len(self.combo_aug)
-		return combo_hard_aug
+		self.aux_update_freq = args.aux_update_freq
+		self.aux_lr = args.aux_lr
+		self.aux_beta = args.aux_beta
+		shared_cnn = self.critic.encoder.shared_cnn
+		aux_cnn = m.HeadCNN(shared_cnn.out_shape, args.num_head_layers, args.num_filters).cuda()
+		self.aux_encoder = m.Encoder(
+			shared_cnn,
+			aux_cnn,
+			m.RLProjection(aux_cnn.out_shape, args.projection_dim)
+		)
+		self.pad_head = m.InverseDynamics(self.aux_encoder, action_shape, args.hidden_dim).cuda()
+		self.init_pad_optimizer()
+		self.train()
 
+	def train(self, training=True):
+		super().train(training)
+		if hasattr(self, 'pad_head'):
+			self.pad_head.train(training)
+   
 	def reset(self, step):
 		super().reset(step)
-		if self.hard_aug_type == 'sequential_combo':
-			self.random_hard_aug = self.get_next_combo_aug()
-			print("Changed augmentation to : ", self.random_hard_aug.__name__)
+		reset_seed = self.base_seed + step
+		if self.args.do_policy_reset:
+			self.aux_encoder.reset_projection_parameters(reset_seed)
+			self.pad_head.reset_policy_parameters(reset_seed)
+			print('Performed IDM head reset at step ', step)
+
+	def init_pad_optimizer(self):
+		self.pad_optimizer = torch.optim.Adam(
+			self.pad_head.parameters(), lr=self.aux_lr, betas=(self.aux_beta, 0.999)
+		)
+
 
 	def update_critic(self, obs, action, reward, next_obs, not_done, L=None, step=None):
 		with torch.no_grad():
@@ -52,8 +69,6 @@ class SVEA(SAC):
 			elif self.hard_aug_type == 'combo':
 				random_hard_aug = random.choice(self.combo_aug)
 				obs = utils.cat(obs, random_hard_aug(obs.clone()))
-			elif self.hard_aug_type == 'sequential_combo':
-				obs = utils.cat(obs, self.random_hard_aug(obs.clone()))
 			
 			action = utils.cat(action, action)
 			target_Q = utils.cat(target_Q, target_Q)
@@ -78,6 +93,18 @@ class SVEA(SAC):
 		critic_loss.backward()
 		self.critic_optimizer.step()
 
+	def update_inverse_dynamics(self, obs, obs_next, action, L=None, step=None):
+		assert obs.shape[-1] == 84 and obs_next.shape[-1] == 84
+
+		pred_action = self.pad_head(augmentations.random_overlay(obs.clone()), augmentations.random_overlay(obs_next.clone()))
+		pad_loss = F.mse_loss(pred_action, action)
+
+		self.pad_optimizer.zero_grad()
+		pad_loss.backward()
+		self.pad_optimizer.step()
+		if L is not None:
+			L.log('train/aux_loss', pad_loss, step)
+
 	def update(self, replay_buffer, L, step):
 		obs, action, reward, next_obs, not_done = replay_buffer.sample_svea()
 
@@ -88,3 +115,6 @@ class SVEA(SAC):
 
 		if step % self.critic_target_update_freq == 0:
 			self.soft_update_critic_target()
+   
+		if step % self.aux_update_freq == 0:
+			self.update_inverse_dynamics(obs, next_obs, action, L, step)

@@ -43,15 +43,26 @@ class SAC(object):
 		self.log_alpha.requires_grad = True
 		self.target_entropy = -np.prod(action_shape)
 
-		self.actor_optimizer = torch.optim.Adam(
-			self.actor.parameters(), lr=args.actor_lr, betas=(args.actor_beta, 0.999)
-		)
-		self.critic_optimizer = torch.optim.Adam(
-			self.critic.parameters(), lr=args.critic_lr, betas=(args.critic_beta, 0.999)
-		)
-		self.log_alpha_optimizer = torch.optim.Adam(
-			[self.log_alpha], lr=args.alpha_lr, betas=(args.alpha_beta, 0.999)
-		)
+		if args.optimizer_type == 'adam':
+			self.actor_optimizer = torch.optim.Adam(
+				self.actor.parameters(), lr=args.actor_lr, betas=(args.actor_beta, 0.999)
+			)
+			self.critic_optimizer = torch.optim.Adam(
+				self.critic.parameters(), lr=args.critic_lr, betas=(args.critic_beta, 0.999)
+			)
+			self.log_alpha_optimizer = torch.optim.Adam(
+				[self.log_alpha], lr=args.alpha_lr, betas=(args.alpha_beta, 0.999)
+			)
+		elif args.optimizer_type == 'adamw':
+			self.actor_optimizer = torch.optim.AdamW(
+				self.actor.parameters(), lr=args.actor_lr, betas=(args.actor_beta, 0.999)
+			)
+			self.critic_optimizer = torch.optim.AdamW(
+				self.critic.parameters(), lr=args.critic_lr, betas=(args.critic_beta, 0.999)
+			)
+			self.log_alpha_optimizer = torch.optim.AdamW(
+				[self.log_alpha], lr=args.alpha_lr, betas=(args.alpha_beta, 0.999)
+			)
 
 		# parameter 개수 파악
 		encoder_par = sum(p.numel() for p in shared_cnn.parameters())		
@@ -80,10 +91,6 @@ class SAC(object):
 
 		if self.args.do_encoder_reset:
 			# actor, critic encoder reset
-			self.actor.encoder.reset_encoder_parameters(
-				reset_seed, 
-				self.args.shrink_alpha
-			)
 			self.critic.encoder.reset_encoder_parameters(
 				reset_seed, 
 				self.args.shrink_alpha
@@ -91,12 +98,17 @@ class SAC(object):
 			# critic_target encoder reset
 			if self.args.critic_target_reset == 'copy_critic':
 				print("critic_target: deepcopy(critic) after reset")
-				self.critic_target.encoder = deepcopy(self.critic.encoder)
+				self.critic_target.encoder.shared_cnn = deepcopy(self.critic.encoder.shared_cnn)
 			else:
 				raise NotImplementedError
 			print('Performed encoder reset at step ', step)
 		
 		if self.args.do_policy_reset:
+			self.actor.encoder.reset_projection_parameters(reset_seed)
+			self.critic.encoder.reset_projection_parameters(reset_seed)
+			self.critic_target.encoder.projection = deepcopy(self.critic.encoder.projection)
+			print('Performed projection reset at step ', step)
+   
 			self.actor.reset_policy_parameters(reset_seed)
 			self.critic.reset_policy_parameters(reset_seed)
 			self.critic_target.Q1 = deepcopy(self.critic.Q1)

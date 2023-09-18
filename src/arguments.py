@@ -30,6 +30,9 @@ def parse_args():
 	parser.add_argument('--hidden_dim', default=1024, type=int)
 	parser.add_argument('--hard_aug_type', default='random_overlay', type=str)
 
+	# optimizer
+	parser.add_argument('--optimizer_type', default='adam', type=str)
+
 	# actor
 	parser.add_argument('--actor_lr', default=1e-3, type=float)
 	parser.add_argument('--actor_beta', default=0.9, type=float)
@@ -95,7 +98,7 @@ def parse_args():
 
 	args = parser.parse_args()
 
-	assert args.algorithm in {'sac', 'rad', 'curl', 'pad', 'soda', 'drq', 'svea'}, f'specified algorithm "{args.algorithm}" is not supported'
+	assert args.algorithm in {'sac', 'rad', 'curl', 'pad', 'soda', 'drq', 'svea', 'svea_idm', 'svea_bc'}, f'specified algorithm "{args.algorithm}" is not supported'
 
 	assert args.eval_mode in {'train', 'color_easy', 'color_hard', 'video_easy', 'video_hard', 'distracting_cs', 'none'}, f'specified mode "{args.eval_mode}" is not supported'
 	assert args.seed is not None, 'must provide seed for experiment'

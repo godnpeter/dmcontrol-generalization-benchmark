@@ -35,9 +35,6 @@ if __name__ == '__main__':
     parser.add_argument('--num_shared_layers',  type=int,  default=11)
     parser.add_argument('--do_policy_reset',  type=str,  default='false')
     parser.add_argument('--do_encoder_reset',  type=str,  default='false')
-    parser.add_argument('--optimizer_type', type=str, default='adam')
-    parser.add_argument('--actor_lr', type=float, default=1e-3)
-    parser.add_argument('--critic_lr', type=float, default=1e-3)
     parser.add_argument('--group_name', type=str, default='test')
     parser.add_argument('--exp_name', type=str, default='test')
     parser.add_argument('--num_games', type=int, default=7)
@@ -64,10 +61,6 @@ if __name__ == '__main__':
     if num_games == 7:
         games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('finger_spin'), \
                 ('cheetah_run'),('cartpole_swingup'), ('cup_catch')]
-    elif num_games == 5:
-        games = [('walker_walk'), ('walker_stand'), ('cup_catch'), ('cartpole_swingup'), ('reacher_easy') ]
-    elif num_games == 2:
-        games = [('cheetah_run'), ('finger_spin') ]
     elif num_games == 4:
         games = [('walker_walk'), ('walker_stand'), ('cup_catch'), ('cartpole_swingup') ]
     elif num_games == 3:
@@ -164,7 +157,7 @@ if __name__ == '__main__':
             m_e_d_i = egl_device[gpu_id]
         
         cmd = 'CUDA_VISIBLE_DEVICES={} MUJOCO_EGL_DEVICE_ID={} \
-                python src/train.py \
+                python src/video_distracting_train.py \
                 --group_name={} \
                 --exp_name={} \
                 --algorithm={} \
@@ -182,9 +175,6 @@ if __name__ == '__main__':
                 --replay_ratio={} \
                 --shrink_alpha={} \
                 --reset_interval_steps={} \
-                --optimizer_type={} \
-                --actor_lr={} \
-                --critic_lr={} \
                 '.format(
                     str(gpu_id),
                     str(m_e_d_i),
@@ -204,14 +194,11 @@ if __name__ == '__main__':
                     exp['width_expansion'],
                     exp['replay_ratio'],
                     exp['shrink_alpha'],
-                    exp['reset_interval_steps'],
-                    exp['optimizer_type'],
-                    exp['actor_lr'],
-                    exp['critic_lr'],
+                    exp['reset_interval_steps']
                 )
         
         print(cmd)
-        
+
         process = multiprocessing.Process(target=run_script, args=(cmd,))
         process.start()
         processes.append(process)

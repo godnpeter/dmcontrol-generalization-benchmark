@@ -110,7 +110,7 @@ class RLProjection(nn.Module):
 	def forward(self, x):
 		return self.projection(x)
 
-	def reset_parameters(self, reset_seed, shrink_alpha):
+	def reset_parameters(self, reset_seed):
 		# Save current RNG state
 		original_rng_state = torch.get_rng_state()
 
@@ -123,10 +123,6 @@ class RLProjection(nn.Module):
 		torch.manual_seed(reset_seed)
 		# Apply the initialization
 		self.apply(weight_init)
-
-		# Update the weights: 0.8 * current weight + 0.2 * new weight
-		for name, param in self.named_parameters():
-			param.data = shrink_alpha * current_weights[name] + (1-shrink_alpha) * param.data
 
 		# Restore original RNG state
 		torch.set_rng_state(original_rng_state)
@@ -222,7 +218,9 @@ class Encoder(nn.Module):
 	
 	def reset_encoder_parameters(self, reset_seed, shrink_alpha):
 		self.shared_cnn.reset_parameters(reset_seed, shrink_alpha)
-		self.projection.reset_parameters(reset_seed, shrink_alpha)
+  
+	def reset_projection_parameters(self, reset_seed):
+		self.projection.reset_parameters(reset_seed)
 
 
 class Actor(nn.Module):
@@ -340,6 +338,37 @@ class CURLHead(nn.Module):
 		return logits
 
 
+
+class BehaviorCloning(nn.Module):
+	def __init__(self, encoder, action_shape, hidden_dim):
+		super().__init__()
+		self.encoder = encoder
+		self.mlp = nn.Sequential(
+			nn.Linear(encoder.out_dim, hidden_dim), nn.ReLU(),
+			nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+			nn.Linear(hidden_dim, action_shape[0])
+		)
+		self.apply(weight_init)
+
+	def forward(self, x):
+		h = self.encoder(x)
+		return self.mlp(h)
+
+	def reset_policy_parameters(self, reset_seed):
+		# Save current RNG state
+		original_rng_state = torch.get_rng_state()
+
+		# Set the manual seed
+		torch.manual_seed(reset_seed)
+
+		# Apply the initialization
+		self.mlp.apply(weight_init)
+
+		# Restore original RNG state
+		torch.set_rng_state(original_rng_state)
+
+
+
 class InverseDynamics(nn.Module):
 	def __init__(self, encoder, action_shape, hidden_dim):
 		super().__init__()
@@ -357,6 +386,18 @@ class InverseDynamics(nn.Module):
 		joint_h = torch.cat([h, h_next], dim=1)
 		return self.mlp(joint_h)
 
+	def reset_policy_parameters(self, reset_seed):
+		# Save current RNG state
+		original_rng_state = torch.get_rng_state()
+
+		# Set the manual seed
+		torch.manual_seed(reset_seed)
+
+		# Apply the initialization
+		self.mlp.apply(weight_init)
+
+		# Restore original RNG state
+		torch.set_rng_state(original_rng_state)
 
 class SODAPredictor(nn.Module):
 	def __init__(self, encoder, hidden_dim):

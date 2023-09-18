@@ -49,37 +49,6 @@ def main(args):
 	env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
-		seed=args.seed,
-		episode_length=args.episode_length,
-		action_repeat=args.action_repeat,
-		image_size=args.image_size,
-		mode='train'
-	)
-	test_ce_env = make_env(
-		domain_name=args.domain_name,
-		task_name=args.task_name,
-		seed=args.seed+42,
-		episode_length=args.episode_length,
-		action_repeat=args.action_repeat,
-		image_size=args.image_size,
-		mode='color_easy',
-		intensity=args.distracting_cs_intensity
-	)
-
-	test_ch_env = make_env(
-		domain_name=args.domain_name,
-		task_name=args.task_name,
-		seed=args.seed+42,
-		episode_length=args.episode_length,
-		action_repeat=args.action_repeat,
-		image_size=args.image_size,
-		mode='color_hard',
-		intensity=args.distracting_cs_intensity
-	)
-
-	test_ve_env = make_env(
-		domain_name=args.domain_name,
-		task_name=args.task_name,
 		seed=args.seed+42,
 		episode_length=args.episode_length,
 		action_repeat=args.action_repeat,
@@ -87,7 +56,17 @@ def main(args):
 		mode='video_easy',
 		intensity=args.distracting_cs_intensity
 	)
-
+ 
+	test_train_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='train'
+	)
+ 
 	test_vh_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
@@ -133,14 +112,6 @@ def main(args):
 	else:
 		raise NotImplementedError
 	
-	cropped_obs_shape = (3*args.frame_stack, args.image_crop_size, args.image_crop_size)
-	print('Observations:', env.observation_space.shape)
-	print('Cropped observations:', cropped_obs_shape)
-	agent = make_agent(
-		obs_shape=cropped_obs_shape,
-		action_shape=env.action_space.shape,
-		args=args
-	)
 
 	print('Working directory:', work_dir)
 	assert not os.path.exists(os.path.join(work_dir, 'model','500000.pt')), 'specified working directory already exists'
@@ -158,6 +129,14 @@ def main(args):
 		capacity=args.train_steps,
 		batch_size=args.batch_size
 	)
+	cropped_obs_shape = (3*args.frame_stack, args.image_crop_size, args.image_crop_size)
+	print('Observations:', env.observation_space.shape)
+	print('Cropped observations:', cropped_obs_shape)
+	agent = make_agent(
+		obs_shape=cropped_obs_shape,
+		action_shape=env.action_space.shape,
+		args=args
+	)
 	
 	start_step, episode, episode_reward, done = 0, 0, 0, True
 	L = Logger(work_dir, args)
@@ -174,10 +153,8 @@ def main(args):
 				print('Evaluating:', work_dir)
 				eval_start_time = time.time()
 				L.log('eval/episode', episode, step * args.action_repeat)
-				evaluate(env, agent, video, args.eval_episodes, L, step * args.action_repeat)
-				evaluate(test_ce_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='color_easy')
-				evaluate(test_ch_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='color_hard')
-				evaluate(test_ve_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy')
+				evaluate(env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy')
+				evaluate(test_train_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='train')
 				evaluate(test_vh_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_hard')
 				evaluate(test_distractingcs02_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='distractingcs_02')
 				evaluate(test_distractingcs05_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='distractingcs_05')
@@ -226,11 +203,12 @@ def main(args):
 		obs = next_obs
 
 		episode_step += 1
-
-	evaluate(test_ce_env, agent, video, args.eval_episodes, L, step, test_env='color_easy', final=True)
-	evaluate(test_ch_env, agent, video, args.eval_episodes, L, step, test_env='color_hard', final=True)
-	evaluate(test_ve_env, agent, video, args.eval_episodes, L, step, test_env='video_easy', final=True)
+  
+	evaluate(env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy', final=True)
+	evaluate(test_train_env, agent, video, args.eval_episodes, L, step, test_env='train', final=True)
 	evaluate(test_vh_env, agent, video, args.eval_episodes, L, step, test_env='video_hard', final=True)
+	evaluate(test_distractingcs02_env, agent, video, args.eval_episodes, L, step, test_env='distractingcs_02', final=True)
+	evaluate(test_distractingcs05_env, agent, video, args.eval_episodes, L, step, test_env='distractingcs_05', final=True)
 	L.dump(step * args.action_repeat)
 	torch.save(agent, os.path.join(model_dir, f'{step * args.action_repeat}.pt'))
 	print('Saved model')

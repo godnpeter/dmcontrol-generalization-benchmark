@@ -8,6 +8,7 @@ import torchvision.transforms.functional as TF
 import dmc2gym
 import utils
 from collections import deque
+import ipdb
 
 
 def make_env(
@@ -33,6 +34,7 @@ def make_env(
 		for path in loaded_paths:
 			if os.path.exists(path):
 				paths.append(path)
+	
 	env = dmc2gym.make(
 		domain_name=domain_name,
 		task_name=task_name,
@@ -52,6 +54,8 @@ def make_env(
 	env = FrameStack(env, frame_stack)
 	if not is_distracting_cs:
 		env = ColorWrapper(env, mode, seed)
+	if is_distracting_cs:
+		env._mode = mode
 
 	return env
 

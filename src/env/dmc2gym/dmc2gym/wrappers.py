@@ -2,6 +2,7 @@ from gym import core, spaces
 from dm_control import suite
 from dm_env import specs
 import numpy as np
+import ipdb
 
 
 def _spec_to_box(spec):
@@ -65,7 +66,8 @@ class DMCWrapper(core.Env):
         self._distracting_cs_intensity = distracting_cs_intensity
         self._background_dataset_paths = background_dataset_paths
         self._channels_first = channels_first
-
+        self._mode = None
+        
         # create task
         if is_distracting_cs:
             from env.distracting_control import suite as dc_suite

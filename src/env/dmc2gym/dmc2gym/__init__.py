@@ -22,7 +22,7 @@ def make(
         channels_first=True
 ):
     if is_distracting_cs:
-        env_id = 'dmc_%s_%s-%s-v1' % (domain_name, task_name, 'dcs')
+        env_id = f'dmc_{domain_name}_{task_name}-{distracting_cs_intensity}-dcs-v1'
     else:
         env_id = 'dmc_%s_%s-v1' % (domain_name, task_name)
 

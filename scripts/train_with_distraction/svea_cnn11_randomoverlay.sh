@@ -1,7 +1,7 @@
 cd ..
 cd ..
 
-python run_parallel.py \
+python run_distracting_parallel.py \
     --group_name 'Hansen_repo' \
     --exp_name 'svea_cnn11_randomoverlay' \
     --algorithm 'svea' \

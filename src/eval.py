@@ -10,20 +10,21 @@ from arguments import parse_args
 from env.wrappers import make_env
 from algorithms.factory import make_agent
 from video import VideoRecorder
+import ipdb
 import augmentations
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
 
-def evaluate(env, agent, video, num_episodes, eval_mode, adapt=False):
+def evaluate(env, agent, video, eval_mode='distractingcs', intensity=0.0):
 	episode_rewards = []
-	for i in tqdm(range(num_episodes)):
-		if adapt:
-			ep_agent = deepcopy(agent)
-			ep_agent.init_pad_optimizer()
-		else:
-			ep_agent = agent
+	for i in tqdm(range(100)):
+
+		ep_agent = agent
 		obs = env.reset()
-		video.init(enabled=True)
+		if i % 100 == 0:
+			video.init(enabled=True)
+		else:
+			video.init(enabled=False)
 		done = False
 		episode_reward = 0
 		while not done:
@@ -32,11 +33,11 @@ def evaluate(env, agent, video, num_episodes, eval_mode, adapt=False):
 			next_obs, reward, done, _ = env.step(action)
 			video.record(env, eval_mode)
 			episode_reward += reward
-			if adapt:
-				ep_agent.update_inverse_dynamics(*augmentations.prepare_pad_batch(obs, next_obs, action))
 			obs = next_obs
 
-		video.save(f'eval_{eval_mode}_{i}.mp4')
+		if i % 100 == 0:
+			video.save(f'eval_{eval_mode}{intensity}_{i}.mp4')
+		
 		episode_rewards.append(episode_reward)
 
 	return np.mean(episode_rewards)
@@ -45,72 +46,153 @@ def evaluate(env, agent, video, num_episodes, eval_mode, adapt=False):
 def main(args):
 	# Set seed
 	utils.set_seed_everywhere(args.seed)
+	torch.set_num_threads(1)
+	games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('finger_spin'), \
+                ('cheetah_run'),('cartpole_swingup'), ('cup_catch')]
+	
+	for game in games:
+		args.domain_name, args.task_name = game.split('_')
 
-	# Initialize environments
-	gym.logger.set_level(40)
-	env = make_env(
-		domain_name=args.domain_name,
-		task_name=args.task_name,
-		seed=args.seed+42,
-		episode_length=args.episode_length,
-		action_repeat=args.action_repeat,
-		image_size=args.image_size,
-		mode=args.eval_mode,
-		intensity=args.distracting_cs_intensity
-	)
+		if args.domain_name == 'cup':
+			args.domain_name = 'ball_in_cup'
 
-	# Set working directory
-	work_dir = os.path.join(args.log_dir, args.domain_name+'_'+args.task_name, args.algorithm, str(args.seed))
-	print('Working directory:', work_dir)
-	assert os.path.exists(work_dir), 'specified working directory does not exist'
-	model_dir = utils.make_dir(os.path.join(work_dir, 'model'))
-	video_dir = utils.make_dir(os.path.join(work_dir, 'video'))
-	video = VideoRecorder(video_dir if args.save_video else None, height=448, width=448)
+		if args.domain_name == 'walker' and args.task_name == 'walk':
+			args.action_repeat = 2
+		elif args.domain_name == 'finger' and args.task_name == 'spin':
+			args.action_repeat = 2
+		elif args.domain_name == 'cartpole' and args.task_name == 'swingup':
+			args.action_repeat = 8
+		else:
+			args.action_repeat = 4
 
-	# Check if evaluation has already been run
-	if args.eval_mode == 'distracting_cs':
-		results_fp = os.path.join(work_dir, args.eval_mode+'_'+str(args.distracting_cs_intensity).replace('.', '_')+'.pt')
-	else:
-		results_fp = os.path.join(work_dir, args.eval_mode+'.pt')
-	assert not os.path.exists(results_fp), f'{args.eval_mode} results already exist for {work_dir}'
+		# Initialize environments
+		gym.logger.set_level(40)
 
-	# Prepare agent
-	assert torch.cuda.is_available(), 'must have cuda enabled'
-	cropped_obs_shape = (3*args.frame_stack, args.image_crop_size, args.image_crop_size)
-	print('Observations:', env.observation_space.shape)
-	print('Cropped observations:', cropped_obs_shape)
-	agent = make_agent(
-		obs_shape=cropped_obs_shape,
-		action_shape=env.action_space.shape,
-		args=args
-	)
-	agent = torch.load(os.path.join(model_dir, str(args.train_steps)+'.pt'))
-	agent.train(False)
-
-	print(f'\nEvaluating {work_dir} for {args.eval_episodes} episodes (mode: {args.eval_mode})')
-	reward = evaluate(env, agent, video, args.eval_episodes, args.eval_mode)
-	print('Reward:', int(reward))
-
-	adapt_reward = None
-	if args.algorithm == 'pad':
-		env = make_env(
+		test_distractingcs01_env = make_env(
 			domain_name=args.domain_name,
 			task_name=args.task_name,
 			seed=args.seed+42,
 			episode_length=args.episode_length,
 			action_repeat=args.action_repeat,
-			mode=args.eval_mode
+			image_size=args.image_size,
+			mode='distracting_cs',
+			intensity=0.1
 		)
-		adapt_reward = evaluate(env, agent, video, args.eval_episodes, args.eval_mode, adapt=True)
-		print('Adapt reward:', int(adapt_reward))
 
-	# Save results
-	torch.save({
-		'args': args,
-		'reward': reward,
-		'adapt_reward': adapt_reward
-	}, results_fp)
-	print('Saved results to', results_fp)
+		test_distractingcs02_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed+42,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='distracting_cs',
+			intensity=0.2
+		)
+
+		test_distractingcs03_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed+42,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='distracting_cs',
+			intensity=0.3
+		)
+
+		test_distractingcs04_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed+42,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='distracting_cs',
+			intensity=0.4
+		)
+
+		test_distractingcs05_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed+42,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='distracting_cs',
+			intensity=0.5
+		)
+
+		# Create working directory
+		if args.encoder_type == 'cnn':
+			work_dir = os.path.join(args.log_dir, args.group_name, args.exp_name, \
+								args.algorithm,  str(args.encoder_type)+ '_' + str(args.num_shared_layers) + '_' + args.hard_aug_type, \
+								args.domain_name+'_'+args.task_name, str(args.seed))
+		elif args.encoder_type == 'impala':
+			work_dir = os.path.join(args.log_dir, args.group_name, args.exp_name, \
+								args.algorithm,  str(args.encoder_type) + '_' + args.hard_aug_type, \
+								args.domain_name+'_'+args.task_name, str(args.seed))
+		else:
+			raise NotImplementedError
+		
+		print('Working directory:', work_dir)
+		if not os.path.exists(work_dir):
+			print('specified working directory does not exist')
+			continue
+		
+		#assert os.path.exists(work_dir), 'specified working directory does not exist'
+		model_dir = utils.make_dir(os.path.join(work_dir, 'model'))
+		video_dir = utils.make_dir(os.path.join(work_dir, 'distracting_video'))
+		video = VideoRecorder(video_dir if args.save_video else None, height=448, width=448)
+
+		# Check if evaluation has already been run
+		#if args.eval_mode == 'distracting_cs':
+		results_fp = os.path.join(work_dir, 'distractingcs_evalresults.pt')
+
+		if os.path.exists(results_fp):
+			print('specified run has already been done')
+			continue
+		#else:
+		#		results_fp = os.path.join(work_dir, args.eval_mode+'.pt')
+		#assert not os.path.exists(results_fp), f'{args.eval_mode} results already exist for {work_dir}'
+
+		# Prepare agent
+		assert torch.cuda.is_available(), 'must have cuda enabled'
+		cropped_obs_shape = (3*args.frame_stack, args.image_crop_size, args.image_crop_size)
+		agent = make_agent(
+			obs_shape=cropped_obs_shape,
+			action_shape=test_distractingcs02_env.action_space.shape,
+			args=args
+		)
+		agent = torch.load(os.path.join(model_dir, str(500000)+'.pt'))
+		agent.train(False)
+
+		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs01_env._mode})')
+		distractingcs_01_reward = evaluate(test_distractingcs01_env, agent, video, intensity=0.1)
+		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs02_env._mode})')
+		distractingcs_02_reward = evaluate(test_distractingcs02_env, agent, video, intensity=0.2)
+		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs03_env._mode})')
+		distractingcs_03_reward = evaluate(test_distractingcs03_env, agent, video, intensity=0.3)
+		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs04_env._mode})')
+		distractingcs_04_reward = evaluate(test_distractingcs04_env, agent, video, intensity=0.4)
+		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs05_env._mode})')
+		distractingcs_05_reward = evaluate(test_distractingcs05_env, agent, video, intensity=0.5)
+		print('Distractingcs 01 Reward:', int(distractingcs_01_reward))
+		print('Distractingcs 02 Reward:', int(distractingcs_02_reward))
+		print('Distractingcs 03 Reward:', int(distractingcs_02_reward))
+		print('Distractingcs 04 Reward:', int(distractingcs_04_reward))
+		print('Distractingcs 05 Reward:', int(distractingcs_05_reward))
+
+		# Save results
+		torch.save({
+			'args': args,
+			'distractingcs 01 reward': distractingcs_01_reward,
+			'distractingcs 02 reward': distractingcs_02_reward,
+			'distractingcs 03 reward': distractingcs_03_reward,
+			'distractingcs 04 reward': distractingcs_04_reward,
+			'distractingcs 05 reward': distractingcs_05_reward
+		}, results_fp)
+		print('Saved results to', results_fp)
 
 
 if __name__ == '__main__':
