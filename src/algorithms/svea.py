@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from copy import deepcopy
+# from new_augmentations import RandomConv, RandomOverlay, CutoutColor, RandomShiftsAug, RandomFlip, RandomRotate, Projection_Transformation
 import utils
 import augmentations
 import algorithms.modules as m
@@ -17,18 +18,32 @@ class SVEA(SAC):
 		self.svea_alpha = args.svea_alpha
 		self.svea_beta = args.svea_beta
 		self.hard_aug_type = args.hard_aug_type
+		
 		if self.hard_aug_type == 'combo':
-			self.combo_aug = [augmentations.random_overlay, augmentations.random_conv, augmentations.random_shift]
+			self.combo_aug = []
+			for aug in args.combo_aug_type_list:
+				if aug == 'random_shift':
+					self.combo_aug.append(RandomShiftsAug(pad=4, random_shift_mode='bilinear'))
+				elif aug == 'random_conv':
+					self.combo_aug.append(RandomConv())
+				elif aug == 'random_overlay':
+					self.combo_aug.append(RandomOverlay(alpha=0.5))
+				elif aug == 'cutout_color':
+					self.combo_aug.append(CutoutColor())
+				elif aug == 'flip':
+					self.combo_aug.append(RandomFlip())
+				elif aug == 'rotate':
+					self.combo_aug.append(RandomRotate(degrees=45.0))
+				elif aug == 'projection_transformation':
+					self.combo_aug.append(Projection_Transformation())
+
+			#self.combo_aug = [augmentations.random_overlay, augmentations.random_conv, augmentations.random_shift]
+		# This isn't really worth it... hh
 		elif self.hard_aug_type == 'sequential_combo':
 			self.combo_aug = [augmentations.random_conv, augmentations.random_overlay]
 			self.combo_aug_index = 0
 			# Learn from random_shift only once
 			self.random_hard_aug = augmentations.random_shift
-
-	def get_next_combo_aug(self):
-		combo_hard_aug = self.combo_aug[self.combo_aug_index]
-		self.combo_aug_index = (self.combo_aug_index + 1) % len(self.combo_aug)
-		return combo_hard_aug
 
 	def reset(self, step):
 		super().reset(step)
@@ -46,14 +61,14 @@ class SVEA(SAC):
 
 		if self.svea_alpha == self.svea_beta:
 			if self.hard_aug_type == 'random_overlay':
-				obs = utils.cat(obs, augmentations.random_overlay(obs.clone()))
+				obs = utils.cat(obs, augmentations.random_overlay(obs.clone()).cuda())
 			elif self.hard_aug_type == 'random_conv':
-				obs = utils.cat(obs, augmentations.random_conv(obs.clone()))
+				obs = utils.cat(obs, augmentations.random_conv(obs.clone()).cuda())
 			elif self.hard_aug_type == 'combo':
 				random_hard_aug = random.choice(self.combo_aug)
-				obs = utils.cat(obs, random_hard_aug(obs.clone()))
+				obs = utils.cat(obs, random_hard_aug(obs.clone()).cuda())
 			elif self.hard_aug_type == 'sequential_combo':
-				obs = utils.cat(obs, self.random_hard_aug(obs.clone()))
+				obs = utils.cat(obs, self.random_hard_aug(obs.clone()).cuda())
 			
 			action = utils.cat(action, action)
 			target_Q = utils.cat(target_Q, target_Q)
@@ -88,3 +103,8 @@ class SVEA(SAC):
 
 		if step % self.critic_target_update_freq == 0:
 			self.soft_update_critic_target()
+
+	def get_next_combo_aug(self):
+		combo_hard_aug = self.combo_aug[self.combo_aug_index]
+		self.combo_aug_index = (self.combo_aug_index + 1) % len(self.combo_aug)
+		return combo_hard_aug

@@ -15,40 +15,51 @@ import augmentations
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
 
-def evaluate(env, agent, video, eval_mode='distractingcs', intensity=0.0):
+def evaluate(env_dict, agent):
 	episode_rewards = []
-	for i in tqdm(range(100)):
+	eval_obs_dict = {}
+	for i in tqdm(range(20)):
+		trajectory_obs_dict = {}
 
 		ep_agent = agent
-		obs = env.reset()
-		if i % 100 == 0:
-			video.init(enabled=True)
-		else:
-			video.init(enabled=False)
+		train_obs = env_dict['train'].reset()
+		
+		trajectory_obs_dict['train'] = [torch.from_numpy(np.array((train_obs))).float()]
+		for eval_mode, eval_env in env_dict.items():
+			if eval_mode == 'train':
+				continue
+			trajectory_obs_dict[eval_mode] = [torch.from_numpy(np.array(eval_env.reset())).float()]
+
 		done = False
 		episode_reward = 0
 		while not done:
 			with utils.eval_mode(ep_agent):
-				action = ep_agent.select_action(obs)
-			next_obs, reward, done, _ = env.step(action)
-			video.record(env, eval_mode)
-			episode_reward += reward
-			obs = next_obs
+				action = ep_agent.select_action(train_obs)
 
-		if i % 100 == 0:
-			video.save(f'eval_{eval_mode}{intensity}_{i}.mp4')
+			train_next_obs, reward, done, _ = env_dict['train'].step(action)
+
+			trajectory_obs_dict['train'].append(torch.from_numpy(np.array((train_next_obs))).float())
+			for eval_mode, eval_env in env_dict.items():
+				if eval_mode == 'train':
+					continue
+				eval_next_obs, *_ = env_dict[eval_mode].step(action)
+				trajectory_obs_dict[eval_mode].append(torch.from_numpy(np.array((eval_next_obs))).float())
+    
+			episode_reward += reward
+			train_obs = train_next_obs
 		
+		eval_obs_dict[f'trajectory_{i}'] = trajectory_obs_dict
+
 		episode_rewards.append(episode_reward)
 
-	return np.mean(episode_rewards)
+	return eval_obs_dict
 
 
 def main(args):
 	# Set seed
 	utils.set_seed_everywhere(args.seed)
 	torch.set_num_threads(1)
-	games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('finger_spin'), \
-                ('cheetah_run'),('cartpole_swingup'), ('cup_catch')]
+	games = [('walker_walk')]
 	
 	for game in games:
 		args.domain_name, args.task_name = game.split('_')
@@ -67,7 +78,51 @@ def main(args):
 
 		# Initialize environments
 		gym.logger.set_level(40)
+  
+		train_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='train'
+		)
 
+  
+		test_ch_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed+42,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='color_hard',
+			intensity=args.distracting_cs_intensity
+		)
+
+		test_ve_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed+42,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='video_easy',
+			intensity=args.distracting_cs_intensity
+		)
+
+		test_vh_env = make_env(
+			domain_name=args.domain_name,
+			task_name=args.task_name,
+			seed=args.seed+42,
+			episode_length=args.episode_length,
+			action_repeat=args.action_repeat,
+			image_size=args.image_size,
+			mode='video_hard',
+			intensity=args.distracting_cs_intensity
+		)
+	
 		test_distractingcs01_env = make_env(
 			domain_name=args.domain_name,
 			task_name=args.task_name,
@@ -123,6 +178,16 @@ def main(args):
 			intensity=0.5
 		)
 
+		eval_env_dict = {'train': train_env, 
+      					'ch': test_ch_env, 
+                   		've': test_ve_env, 
+                     	'vh': test_vh_env, 
+                      	'dcs01': test_distractingcs01_env, 
+                       	'dcs02': test_distractingcs02_env,
+      					'dcs03': test_distractingcs03_env, 
+           				'dcs04': test_distractingcs04_env, 
+               			'dcs05': test_distractingcs05_env}
+
 		# Create working directory
 		if args.encoder_type == 'cnn':
 			work_dir = os.path.join(args.log_dir, args.group_name, args.exp_name, \
@@ -147,7 +212,7 @@ def main(args):
 
 		# Check if evaluation has already been run
 		#if args.eval_mode == 'distracting_cs':
-		results_fp = os.path.join(work_dir, 'distractingcs_evalresults.pt')
+		results_fp = os.path.join(work_dir, 'test_obs_dict.pt')
 
 		if os.path.exists(results_fp):
 			print('specified run has already been done')
@@ -158,7 +223,7 @@ def main(args):
 
 		# Prepare agent
 		assert torch.cuda.is_available(), 'must have cuda enabled'
-		ipdb.set_trace()
+
 		cropped_obs_shape = (3*args.frame_stack, args.image_crop_size, args.image_crop_size)
 		agent = make_agent(
 			obs_shape=cropped_obs_shape,
@@ -168,30 +233,11 @@ def main(args):
 		agent = torch.load(os.path.join(model_dir, str(500000)+'.pt'))
 		agent.train(False)
 
-		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs01_env._mode})')
-		distractingcs_01_reward = evaluate(test_distractingcs01_env, agent, video, intensity=0.1)
-		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs02_env._mode})')
-		distractingcs_02_reward = evaluate(test_distractingcs02_env, agent, video, intensity=0.2)
-		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs03_env._mode})')
-		distractingcs_03_reward = evaluate(test_distractingcs03_env, agent, video, intensity=0.3)
-		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs04_env._mode})')
-		distractingcs_04_reward = evaluate(test_distractingcs04_env, agent, video, intensity=0.4)
-		print(f'\nEvaluating {work_dir} for {100} episodes (mode: {test_distractingcs05_env._mode})')
-		distractingcs_05_reward = evaluate(test_distractingcs05_env, agent, video, intensity=0.5)
-		print('Distractingcs 01 Reward:', int(distractingcs_01_reward))
-		print('Distractingcs 02 Reward:', int(distractingcs_02_reward))
-		print('Distractingcs 03 Reward:', int(distractingcs_02_reward))
-		print('Distractingcs 04 Reward:', int(distractingcs_04_reward))
-		print('Distractingcs 05 Reward:', int(distractingcs_05_reward))
-
+		test_obs_dict = evaluate(eval_env_dict, agent)
+		ipdb.set_trace()
 		# Save results
 		torch.save({
-			'args': args,
-			'distractingcs 01 reward': distractingcs_01_reward,
-			'distractingcs 02 reward': distractingcs_02_reward,
-			'distractingcs 03 reward': distractingcs_03_reward,
-			'distractingcs 04 reward': distractingcs_04_reward,
-			'distractingcs 05 reward': distractingcs_05_reward
+			'test_obs_dict': test_obs_dict
 		}, results_fp)
 		print('Saved results to', results_fp)
 

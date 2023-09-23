@@ -55,16 +55,6 @@ def main(args):
 		image_size=args.image_size,
 		mode='train'
 	)
-	test_ce_env = make_env(
-		domain_name=args.domain_name,
-		task_name=args.task_name,
-		seed=args.seed+42,
-		episode_length=args.episode_length,
-		action_repeat=args.action_repeat,
-		image_size=args.image_size,
-		mode='color_easy',
-		intensity=args.distracting_cs_intensity
-	)
 
 	test_ch_env = make_env(
 		domain_name=args.domain_name,
@@ -99,6 +89,17 @@ def main(args):
 		intensity=args.distracting_cs_intensity
 	)
  
+	test_distractingcs01_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='distracting_cs',
+		intensity=0.1
+	)
+
 	test_distractingcs02_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
@@ -109,7 +110,29 @@ def main(args):
 		mode='distracting_cs',
 		intensity=0.2
 	)
+ 
+	test_distractingcs03_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='distracting_cs',
+		intensity=0.3
+	)
 
+	test_distractingcs04_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='distracting_cs',
+		intensity=0.4
+	)
+ 
 	test_distractingcs05_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
@@ -175,12 +198,9 @@ def main(args):
 				eval_start_time = time.time()
 				L.log('eval/episode', episode, step * args.action_repeat)
 				evaluate(env, agent, video, args.eval_episodes, L, step * args.action_repeat)
-				evaluate(test_ce_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='color_easy')
 				evaluate(test_ch_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='color_hard')
 				evaluate(test_ve_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy')
 				evaluate(test_vh_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_hard')
-				evaluate(test_distractingcs02_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='distractingcs_02')
-				evaluate(test_distractingcs05_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='distractingcs_05')
 				L.log('eval/duration', time.time() - eval_start_time, step * args.action_repeat)
 				L.dump(step * args.action_repeat)
 			# Save agent periodically
@@ -227,10 +247,14 @@ def main(args):
 
 		episode_step += 1
 
-	evaluate(test_ce_env, agent, video, args.eval_episodes, L, step, test_env='color_easy', final=True)
 	evaluate(test_ch_env, agent, video, args.eval_episodes, L, step, test_env='color_hard', final=True)
 	evaluate(test_ve_env, agent, video, args.eval_episodes, L, step, test_env='video_easy', final=True)
 	evaluate(test_vh_env, agent, video, args.eval_episodes, L, step, test_env='video_hard', final=True)
+	evaluate(test_distractingcs01_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_01', final=True)
+	evaluate(test_distractingcs02_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_02', final=True)
+	evaluate(test_distractingcs03_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_03', final=True)
+	evaluate(test_distractingcs04_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_04', final=True)
+	evaluate(test_distractingcs05_env, agent, video, args.eval_episodes, L, step, test_env='distractingcs_05', final=True)
 	L.dump(step * args.action_repeat)
 	torch.save(agent, os.path.join(model_dir, f'{step * args.action_repeat}.pt'))
 	print('Saved model')

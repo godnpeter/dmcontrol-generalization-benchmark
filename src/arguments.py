@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+from ast import literal_eval
 
 def str2bool(v):
     """Convert string representation of boolean to actual boolean."""
@@ -29,6 +30,7 @@ def parse_args():
 	parser.add_argument('--batch_size', default=128, type=int)
 	parser.add_argument('--hidden_dim', default=1024, type=int)
 	parser.add_argument('--hard_aug_type', default='random_overlay', type=str)
+	parser.add_argument("--combo_aug_type_list", type=str, default='random_shift,random_conv,random_overlay')
 
 	# optimizer
 	parser.add_argument('--optimizer_type', default='adam', type=str)
@@ -111,6 +113,11 @@ def parse_args():
 	args.save_freq = int(args.save_freq.replace('k', '000'))
 	args.eval_freq = int(args.eval_freq.replace('k', '000'))
 
+	# Access and use the arguments
+	args.combo_aug_type_list = args.combo_aug_type_list.split(',')
+	if args.hard_aug_type == 'combo':
+		print("Combo Aug Type List:", args.combo_aug_type_list)
+      
 	if args.eval_mode == 'none':
 		args.eval_mode = None
 

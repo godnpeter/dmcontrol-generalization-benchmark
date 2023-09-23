@@ -7,7 +7,8 @@ import random
 import augmentations
 import subprocess
 from datetime import datetime
-
+from new_augmentations import Augmentation
+import ipdb
 
 class eval_mode(object):
     def __init__(self, *models):
@@ -105,6 +106,8 @@ class ReplayBuffer(object):
         self.idx = 0
         self.full = False
 
+        self.random_shift = Augmentation(obs_shape, aug_types=['random_shift'])
+
     def add(self, obs, action, reward, next_obs, done):
         obses = (obs, next_obs)
         if self.idx >= len(self._obses):
@@ -167,7 +170,9 @@ class ReplayBuffer(object):
 
     def sample_svea(self, n=None, pad=4):
         obs, actions, rewards, next_obs, not_dones = self.__sample__(n=n)
-        obs = augmentations.random_shift(obs, pad)
+        #ipdb.set_trace()
+        obs = self.random_shift(obs)
+        #obs = augmentations.random_shift(obs, pad)
 
         return obs, actions, rewards, next_obs, not_dones
 

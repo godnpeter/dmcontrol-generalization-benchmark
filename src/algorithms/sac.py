@@ -7,7 +7,6 @@ import utils
 import ipdb
 import algorithms.modules as m
 
-
 class SAC(object):
 	def __init__(self, obs_shape, action_shape, args):
 		self.args = args

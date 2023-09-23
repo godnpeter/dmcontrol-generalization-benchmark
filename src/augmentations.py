@@ -11,7 +11,6 @@ import os
 places_dataloader = None
 places_iter = None
 
-
 def _load_places(batch_size=256, image_size=84, num_workers=16, use_val=False):
 	global places_dataloader, places_iter
 	partition = 'val' if use_val else 'train'

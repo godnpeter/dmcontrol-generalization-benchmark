@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=7 MUJOCO_EGL_DEVICE_ID=4 python3 src/train.py --algorithm svea --seed 0 --encoder_type impala
+CUDA_VISIBLE_DEVICES=4 MUJOCO_EGL_DEVICE_ID=4 python3 src/train.py --algorithm svea --seed 0 --encoder_type impala --eval_episodes 0

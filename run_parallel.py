@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_exp_per_device',  type=int,  default=3)
     parser.add_argument('--algorithm',  type=str,  default='svea')
     parser.add_argument('--hard_aug_type', type=str, default='random_overlay')
+    parser.add_argument('--combo_aug_type_list', type=str, default=['random_shift', 'random_conv', 'random_overlay'], nargs='+')    
     parser.add_argument('--encoder_type', type=str, default='cnn')
     parser.add_argument('--width_expansion', type=int, default=1)
     parser.add_argument('--replay_ratio', default=1, type=int)
@@ -44,7 +45,7 @@ if __name__ == '__main__':
     parser.add_argument('--egl_device_id_equal_to_cuda_id', default=False, action='store_true')
 
     #parser.add_argument('--eval_mode', action='append',  default=[]) 
-
+    
     args = vars(parser.parse_args())
     seeds = np.arange(args.pop('num_seeds')) 
     print('seeds:',seeds)
@@ -185,6 +186,7 @@ if __name__ == '__main__':
                 --optimizer_type={} \
                 --actor_lr={} \
                 --critic_lr={} \
+                --combo_aug_type_list={} \
                 '.format(
                     str(gpu_id),
                     str(m_e_d_i),
@@ -208,10 +210,11 @@ if __name__ == '__main__':
                     exp['optimizer_type'],
                     exp['actor_lr'],
                     exp['critic_lr'],
+                    ','.join(exp['combo_aug_type_list'])
                 )
         
         print(cmd)
-        
+
         process = multiprocessing.Process(target=run_script, args=(cmd,))
         process.start()
         processes.append(process)
