@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from copy import deepcopy
-# from new_augmentations import RandomConv, RandomOverlay, CutoutColor, RandomShiftsAug, RandomFlip, RandomRotate, Projection_Transformation
+from new_augmentations import RandomConv, RandomOverlay, CutoutColor, RandomShiftsAug, RandomFlip, RandomRotate, Projection_Transformation
 import utils
 import augmentations
 import algorithms.modules as m

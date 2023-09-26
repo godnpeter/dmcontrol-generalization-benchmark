@@ -6,6 +6,7 @@ import utils
 import time
 import wandb
 import ipdb
+import random
 from arguments import parse_args
 from env.wrappers import make_env
 from algorithms.factory import make_agent
@@ -46,7 +47,29 @@ def main(args):
 	torch.set_num_threads(1)
 	# Initialize environments
 	gym.logger.set_level(40)
-	env = make_env(
+
+	train_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='train'
+	)
+
+	test_ch_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='color_hard',
+		intensity=args.distracting_cs_intensity
+	)
+
+	test_ve_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
 		seed=args.seed+42,
@@ -56,17 +79,7 @@ def main(args):
 		mode='video_easy',
 		intensity=args.distracting_cs_intensity
 	)
- 
-	test_train_env = make_env(
-		domain_name=args.domain_name,
-		task_name=args.task_name,
-		seed=args.seed,
-		episode_length=args.episode_length,
-		action_repeat=args.action_repeat,
-		image_size=args.image_size,
-		mode='train'
-	)
- 
+
 	test_vh_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
@@ -78,6 +91,17 @@ def main(args):
 		intensity=args.distracting_cs_intensity
 	)
  
+	test_distractingcs01_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='distracting_cs',
+		intensity=0.1
+	)
+
 	test_distractingcs02_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
@@ -88,7 +112,29 @@ def main(args):
 		mode='distracting_cs',
 		intensity=0.2
 	)
+ 
+	test_distractingcs03_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='distracting_cs',
+		intensity=0.3
+	)
 
+	test_distractingcs04_env = make_env(
+		domain_name=args.domain_name,
+		task_name=args.task_name,
+		seed=args.seed+42,
+		episode_length=args.episode_length,
+		action_repeat=args.action_repeat,
+		image_size=args.image_size,
+		mode='distracting_cs',
+		intensity=0.4
+	)
+ 
 	test_distractingcs05_env = make_env(
 		domain_name=args.domain_name,
 		task_name=args.task_name,
@@ -99,6 +145,16 @@ def main(args):
 		mode='distracting_cs',
 		intensity=0.5
 	)
+
+	train_envs = []
+	if 'train' in args.train_env_list:
+		train_envs.append(train_env)
+	elif 'color_hard' in args.train_env_list:
+		train_envs.append(test_ch_env)
+	elif 'video_easy' in args.train_env_list:
+		train_envs.append(test_ve_env)
+	elif 'video_hard' in args.train_env_list:
+		train_envs.append(test_vh_env)
 
 	# Create working directory
 	if args.encoder_type == 'cnn':
@@ -112,6 +168,14 @@ def main(args):
 	else:
 		raise NotImplementedError
 	
+	cropped_obs_shape = (3*args.frame_stack, args.image_crop_size, args.image_crop_size)
+	print('Observations:', train_env.observation_space.shape)
+	print('Cropped observations:', cropped_obs_shape)
+	agent = make_agent(
+		obs_shape=cropped_obs_shape,
+		action_shape=train_env.action_space.shape,
+		args=args
+	)
 
 	print('Working directory:', work_dir)
 	assert not os.path.exists(os.path.join(work_dir, 'model','500000.pt')), 'specified working directory already exists'
@@ -124,23 +188,17 @@ def main(args):
 	# Prepare agent
 	assert torch.cuda.is_available(), 'must have cuda enabled'
 	replay_buffer = utils.ReplayBuffer(
-		obs_shape=env.observation_space.shape,
-		action_shape=env.action_space.shape,
+		obs_shape=train_env.observation_space.shape,
+		action_shape=train_env.action_space.shape,
 		capacity=args.train_steps,
 		batch_size=args.batch_size
-	)
-	cropped_obs_shape = (3*args.frame_stack, args.image_crop_size, args.image_crop_size)
-	print('Observations:', env.observation_space.shape)
-	print('Cropped observations:', cropped_obs_shape)
-	agent = make_agent(
-		obs_shape=cropped_obs_shape,
-		action_shape=env.action_space.shape,
-		args=args
 	)
 	
 	start_step, episode, episode_reward, done = 0, 0, 0, True
 	L = Logger(work_dir, args)
 	start_time = time.time()
+
+	env = train_env
 	for step in range(start_step, args.train_steps+1):
 		if done:
 			if step > start_step:
@@ -153,11 +211,10 @@ def main(args):
 				print('Evaluating:', work_dir)
 				eval_start_time = time.time()
 				L.log('eval/episode', episode, step * args.action_repeat)
-				evaluate(env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy')
-				evaluate(test_train_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='train')
+				evaluate(train_env, agent, video, args.eval_episodes, L, step * args.action_repeat)
+				evaluate(test_ch_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='color_hard')
+				evaluate(test_ve_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy')
 				evaluate(test_vh_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_hard')
-				evaluate(test_distractingcs02_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='distractingcs_02')
-				evaluate(test_distractingcs05_env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='distractingcs_05')
 				L.log('eval/duration', time.time() - eval_start_time, step * args.action_repeat)
 				L.dump(step * args.action_repeat)
 			# Save agent periodically
@@ -166,6 +223,7 @@ def main(args):
 
 			L.log('train/episode_return', episode_reward, step * args.action_repeat)
 
+			env = random.choice(train_envs)
 			obs = env.reset()
 			done = False
 			episode_reward = 0
@@ -203,11 +261,14 @@ def main(args):
 		obs = next_obs
 
 		episode_step += 1
-  
-	evaluate(env, agent, video, args.eval_episodes, L, step * args.action_repeat, test_env='video_easy', final=True)
-	evaluate(test_train_env, agent, video, args.eval_episodes, L, step, test_env='train', final=True)
+
+	evaluate(test_ch_env, agent, video, args.eval_episodes, L, step, test_env='color_hard', final=True)
+	evaluate(test_ve_env, agent, video, args.eval_episodes, L, step, test_env='video_easy', final=True)
 	evaluate(test_vh_env, agent, video, args.eval_episodes, L, step, test_env='video_hard', final=True)
-	evaluate(test_distractingcs02_env, agent, video, args.eval_episodes, L, step, test_env='distractingcs_02', final=True)
+	evaluate(test_distractingcs01_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_01', final=True)
+	evaluate(test_distractingcs02_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_02', final=True)
+	evaluate(test_distractingcs03_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_03', final=True)
+	evaluate(test_distractingcs04_env, agent, video, args.eval_episodes, L, step , test_env='distractingcs_04', final=True)
 	evaluate(test_distractingcs05_env, agent, video, args.eval_episodes, L, step, test_env='distractingcs_05', final=True)
 	L.dump(step * args.action_repeat)
 	torch.save(agent, os.path.join(model_dir, f'{step * args.action_repeat}.pt'))

@@ -35,6 +35,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_shared_layers',  type=int,  default=11)
     parser.add_argument('--do_policy_reset',  type=str,  default='false')
     parser.add_argument('--do_encoder_reset',  type=str,  default='false')
+    parser.add_argument('--train_with_distraction', default='true', type=str)
+    parser.add_argument("--train_env_list", type=str, default='train,color_hard,video_easy')
     parser.add_argument('--group_name', type=str, default='test')
     parser.add_argument('--exp_name', type=str, default='test')
     parser.add_argument('--num_games', type=int, default=7)
@@ -175,6 +177,8 @@ if __name__ == '__main__':
                 --replay_ratio={} \
                 --shrink_alpha={} \
                 --reset_interval_steps={} \
+                --train_with_distraction={} \
+                --train_env_list={} \
                 '.format(
                     str(gpu_id),
                     str(m_e_d_i),
@@ -194,7 +198,9 @@ if __name__ == '__main__':
                     exp['width_expansion'],
                     exp['replay_ratio'],
                     exp['shrink_alpha'],
-                    exp['reset_interval_steps']
+                    exp['reset_interval_steps'],
+                    exp['train_with_distraction'],
+                    exp['train_env_list']
                 )
         
         print(cmd)

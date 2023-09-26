@@ -422,41 +422,48 @@ def _get_out_shape(in_shape, layers):
 	return x.squeeze(0).shape
 
 class ResidualBlock(nn.Module):
-    def __init__(self,
-                 in_channels):
-        super(ResidualBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
+	def __init__(self,
+					in_channels):
+		super(ResidualBlock, self).__init__()
+		self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
+		self.conv2 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=3, stride=1, padding=1)
 
-        self.residual_layers = nn.Sequential(
-            nn.ReLU(),
-            self.conv1,
-            nn.ReLU(),
-            self.conv2,
-        )
+		self.layer_norm1 = nn.GroupNorm(1, in_channels, affine=True)
+		self.layer_norm2 = nn.GroupNorm(1, in_channels, affine=True)
+
+		self.residual_layers = nn.Sequential(
+			nn.ReLU(),
+			self.conv1,
+			self.layer_norm1,
+			nn.ReLU(),
+			self.conv2,
+			self.layer_norm2
+		)
 
 
-    def forward(self, x):
-        out = self.residual_layers(x)
-        return out + x
+	def forward(self, x):
+		out = self.residual_layers(x)
+		return out + x
 
 class ImpalaBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(ImpalaBlock, self).__init__()
-        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)
-        self.res1 = ResidualBlock(out_channels)
-        self.res2 = ResidualBlock(out_channels)
+	def __init__(self, in_channels, out_channels):
+		super(ImpalaBlock, self).__init__()
+		self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)
+		self.layer_norm = nn.GroupNorm(1, out_channels, affine=True)
+		self.res1 = ResidualBlock(out_channels)
+		self.res2 = ResidualBlock(out_channels)
 
-        self.block_layers = nn.Sequential(
-            self.conv,
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            self.res1,
-            self.res2
-        )
+		self.block_layers = nn.Sequential(
+			self.conv,
+			self.layer_norm,
+			nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+			self.res1,
+			self.res2
+		)
 
-    def forward(self, x):
-        x = self.block_layers(x)
-        return x
+	def forward(self, x):
+		x = self.block_layers(x)
+		return x
 
 class Impala(nn.Module):
 	def __init__(self,

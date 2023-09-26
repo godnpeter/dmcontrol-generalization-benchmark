@@ -31,6 +31,8 @@ def parse_args():
 	parser.add_argument('--hidden_dim', default=1024, type=int)
 	parser.add_argument('--hard_aug_type', default='random_overlay', type=str)
 	parser.add_argument("--combo_aug_type_list", type=str, default='random_shift,random_conv,random_overlay')
+	parser.add_argument('--train_with_distraction', default='False', type=str2bool)
+	parser.add_argument("--train_env_list", type=str, default='train,color_hard,video_easy')
 
 	# optimizer
 	parser.add_argument('--optimizer_type', default='adam', type=str)
@@ -117,7 +119,11 @@ def parse_args():
 	args.combo_aug_type_list = args.combo_aug_type_list.split(',')
 	if args.hard_aug_type == 'combo':
 		print("Combo Aug Type List:", args.combo_aug_type_list)
-      
+
+	args.train_env_list = args.train_env_list.split(',')
+	if args.train_with_distraction:
+		print("Train env List: ", args.train_env_list)
+
 	if args.eval_mode == 'none':
 		args.eval_mode = None
 
