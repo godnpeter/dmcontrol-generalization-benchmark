@@ -64,7 +64,7 @@ if __name__ == '__main__':
         games = [('walker_walk'), ('walker_stand'), ('reacher_easy'), ('finger_spin'), \
                 ('cheetah_run'),('cartpole_swingup'), ('cup_catch')]
     elif num_games == 4:
-        games = [('walker_walk'), ('walker_stand'), ('cup_catch'), ('cartpole_swingup') ]
+        games = [('cheetah_run'), ('walker_stand'), ('cup_catch'), ('cartpole_swingup')]
     elif num_games == 3:
         games = [('cheetah_run'), ('finger_spin'), ('reacher_easy') ]
     # create configurations for child run

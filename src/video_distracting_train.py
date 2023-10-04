@@ -1,5 +1,6 @@
 import torch
 import os
+import ipdb
 import numpy as np
 import gym
 import utils
@@ -149,11 +150,11 @@ def main(args):
 	train_envs = []
 	if 'train' in args.train_env_list:
 		train_envs.append(train_env)
-	elif 'color_hard' in args.train_env_list:
+	if 'color_hard' in args.train_env_list:
 		train_envs.append(test_ch_env)
-	elif 'video_easy' in args.train_env_list:
+	if 'video_easy' in args.train_env_list:
 		train_envs.append(test_ve_env)
-	elif 'video_hard' in args.train_env_list:
+	if 'video_hard' in args.train_env_list:
 		train_envs.append(test_vh_env)
 
 	# Create working directory
@@ -197,8 +198,10 @@ def main(args):
 	start_step, episode, episode_reward, done = 0, 0, 0, True
 	L = Logger(work_dir, args)
 	start_time = time.time()
-
-	env = train_env
+	for env_name in args.train_env_list:
+		print("Starting training in train envs: ", env_name)
+	
+	#env = train_env
 	for step in range(start_step, args.train_steps+1):
 		if done:
 			if step > start_step:
@@ -224,6 +227,7 @@ def main(args):
 			L.log('train/episode_return', episode_reward, step * args.action_repeat)
 
 			env = random.choice(train_envs)
+			# print('chosen env:', str(env._mode))
 			obs = env.reset()
 			done = False
 			episode_reward = 0
